@@ -428,6 +428,92 @@ func fetchWeek(cfg *config) *weekResp {
 	return &r
 }
 
+// ─── language inference from heartbeat entities ──────────────────────────────
+
+type heartbeat struct {
+	Entity   string  `json:"entity"`
+	Time     float64 `json:"time"`
+	Language string  `json:"language"`
+}
+
+func fetchHeartbeats(cfg *config, date string) []heartbeat {
+	var r struct {
+		Data []heartbeat `json:"data"`
+	}
+	if err := apiGet(cfg, "/users/current/heartbeats?date="+date, &r); err != nil {
+		dbg("fetchHeartbeats error: %v", err)
+		return nil
+	}
+	return r.Data
+}
+
+var extLang = map[string]string{
+	".py": "Python", ".go": "Go", ".js": "JavaScript", ".ts": "TypeScript",
+	".tsx": "TSX", ".jsx": "JSX", ".rb": "Ruby", ".rs": "Rust",
+	".java": "Java", ".kt": "Kotlin", ".swift": "Swift",
+	".cpp": "C++", ".cc": "C++", ".cxx": "C++", ".c": "C", ".h": "C/C++",
+	".cs": "C#", ".html": "HTML", ".css": "CSS", ".scss": "Sass", ".sass": "Sass",
+	".md": "Markdown", ".json": "JSON", ".yaml": "YAML", ".yml": "YAML",
+	".sh": "Shell", ".bash": "Shell", ".zsh": "Shell", ".fish": "Shell",
+	".vim": "Vim Script", ".lua": "Lua", ".sql": "SQL", ".php": "PHP",
+	".dart": "Dart", ".elm": "Elm", ".ex": "Elixir", ".exs": "Elixir",
+	".erl": "Erlang", ".hs": "Haskell", ".ml": "OCaml", ".scala": "Scala",
+	".clj": "Clojure", ".r": "R", ".jl": "Julia", ".nim": "Nim", ".zig": "Zig",
+	".tf": "Terraform", ".tex": "LaTeX", ".toml": "TOML", ".xml": "XML",
+	".ipynb": "Jupyter", ".proto": "Protobuf", ".rkt": "Racket",
+}
+
+func inferLanguage(entity string) string {
+	base := strings.ToLower(filepath.Base(entity))
+	switch base {
+	case "dockerfile", "containerfile":
+		return "Docker"
+	case "makefile", "gnumakefile":
+		return "Makefile"
+	}
+	if lang, ok := extLang[strings.ToLower(filepath.Ext(entity))]; ok {
+		return lang
+	}
+	return ""
+}
+
+func inferTopLang(cfg *config, date string) (string, int) {
+	hbs := fetchHeartbeats(cfg, date)
+	if len(hbs) == 0 {
+		return "", 0
+	}
+	counts := map[string]int{}
+	for _, h := range hbs {
+		if l := inferLanguage(h.Entity); l != "" {
+			counts[l]++
+		}
+	}
+	if len(counts) == 0 {
+		return "", 0
+	}
+	best, max := "", 0
+	for k, v := range counts {
+		if v > max {
+			max, best = v, k
+		}
+	}
+	return best, max
+}
+
+var (
+	cachedLang  string
+	cachedFiles int
+	langCached  bool
+)
+
+func getInferredLang(cfg *config) (string, int) {
+	if !langCached {
+		langCached = true
+		cachedLang, cachedFiles = inferTopLang(cfg, time.Now().Format("2006-01-02"))
+	}
+	return cachedLang, cachedFiles
+}
+
 func topItem(items []item) string {
 	best := ""
 	max := 0.0
@@ -777,7 +863,11 @@ func main() {
 			if tl := topItem(t.Data.Languages); tl != "" {
 				fields = append(fields, field{"language", tl})
 			} else if len(t.Data.Languages) > 0 {
-				fields = append(fields, field{"language", dim + "untracked — editor plugin can't detect filetype" + reset})
+				if il, ifc := getInferredLang(cfg); il != "" {
+					fields = append(fields, field{"language", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
+				} else {
+					fields = append(fields, field{"language", dim + "untracked" + reset})
+				}
 			}
 		}
 		if w := fetchWeek(cfg); w != nil {
@@ -789,7 +879,11 @@ func main() {
 			if tl := topItem(w.Data.Languages); tl != "" {
 				fields = append(fields, field{"top lang", tl})
 			} else if len(w.Data.Languages) > 0 {
-				fields = append(fields, field{"top lang", dim + "untracked — editor plugin can't detect filetype" + reset})
+				if il, ifc := getInferredLang(cfg); il != "" {
+					fields = append(fields, field{"top lang", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
+				} else {
+					fields = append(fields, field{"top lang", dim + "untracked" + reset})
+				}
 			}
 		}
 		if !gotAny && lastAPIErr != nil {
