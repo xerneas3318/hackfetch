@@ -776,6 +776,8 @@ func main() {
 			}
 			if tl := topItem(t.Data.Languages); tl != "" {
 				fields = append(fields, field{"language", tl})
+			} else if len(t.Data.Languages) > 0 {
+				fields = append(fields, field{"language", dim + "untracked — editor plugin can't detect filetype" + reset})
 			}
 		}
 		if w := fetchWeek(cfg); w != nil {
@@ -786,6 +788,8 @@ func main() {
 			}
 			if tl := topItem(w.Data.Languages); tl != "" {
 				fields = append(fields, field{"top lang", tl})
+			} else if len(w.Data.Languages) > 0 {
+				fields = append(fields, field{"top lang", dim + "untracked — editor plugin can't detect filetype" + reset})
 			}
 		}
 		if !gotAny && lastAPIErr != nil {
