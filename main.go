@@ -1,0 +1,803 @@
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+var debug = os.Getenv("HACKFETCH_DEBUG") != ""
+
+func dbg(format string, args ...any) {
+	if debug {
+		fmt.Fprintf(os.Stderr, "[hackfetch] "+format+"\n", args...)
+	}
+}
+
+const (
+	reset = "\x1b[0m"
+	bold  = "\x1b[1m"
+	white = "\x1b[38;5;231m"
+	dim   = "\x1b[38;5;243m"
+	txt   = "\x1b[38;5;253m"
+	orange = "\x1b[38;5;208m"
+	green  = "\x1b[38;5;42m"
+)
+
+func ansi(code int) string {
+	return fmt.Sprintf("\x1b[38;5;%dm", code)
+}
+
+// ─── logos ───────────────────────────────────────────────────────────────────
+
+var logos = map[string][]string{
+	"hackclub": {
+		"██   ██  █████   ██████ ██   ██",
+		"██   ██ ██   ██ ██      ██  ██ ",
+		"███████ ███████ ██      █████  ",
+		"██   ██ ██   ██ ██      ██  ██ ",
+		"██   ██ ██   ██  ██████ ██   ██",
+		"                               ",
+		" ██████ ██      ██    ██ ██████",
+		"██      ██      ██    ██ ██   ██",
+		"██      ██      ██    ██ ██████",
+		"██      ██      ██    ██ ██   ██",
+		" ██████ ███████  ██████  ██████",
+	},
+	"stardance": {
+		"        ·  ✦  ·  ★  ·         ",
+		"      ✧               ✧       ",
+		"   ★                     ★    ",
+		"       ✦             ✦        ",
+		"  ✧    s t a r d a n c e   ✧  ",
+		"       ✦      2026     ✦      ",
+		"   ★                     ★    ",
+		"       ✧             ✧        ",
+		"      ✦   hack  club   ✦      ",
+		"        ·  ★  ·  ✦  ·         ",
+		"             ✧                ",
+	},
+	"flag": {
+		"    ╭───────────╮             ",
+		"    │░░░░░░░░░░░│             ",
+		"    │░ H A C K ░│             ",
+		"    │░░░░░░░░░░░│             ",
+		"    │░ C L U B ░│             ",
+		"    │░░░░░░░░░░░│             ",
+		"    ╰─────╮╭────╯             ",
+		"          ││                  ",
+		"          ││                  ",
+		"          ││                  ",
+		"         ─┴─                  ",
+	},
+	"orpheus": {
+		"      ╭──────────╮            ",
+		"     ╱  ◉    ◉   ╲            ",
+		"    │      ▽      │           ",
+		"    │   ╲_____╱   │           ",
+		"     ╲___________╱            ",
+		"      ╱│       │╲             ",
+		"     ╱ │  ♥    │ ╲            ",
+		"    │  │ hack  │  │           ",
+		"    │  │ club  │  │           ",
+		"     ╲ │       │ ╱            ",
+		"       ╰───────╯              ",
+	},
+	"rocket": {
+		"           /\\                 ",
+		"          /  \\                ",
+		"         |    |               ",
+		"         |HACK|               ",
+		"         |CLUB|               ",
+		"         |    |               ",
+		"        /|    |\\              ",
+		"       / |    | \\             ",
+		"      /__|____|__\\            ",
+		"          /\\/\\                ",
+		"         /////\\               ",
+	},
+}
+
+// ─── color schemes ───────────────────────────────────────────────────────────
+
+type colorMode int
+
+const (
+	modeSingle colorMode = iota
+	modePerLine
+	modePerChar
+)
+
+type scheme struct {
+	colors []int
+	mode   colorMode
+}
+
+var schemes = map[string]scheme{
+	"hackclub":  {[]int{203}, modeSingle},
+	"orange":    {[]int{208}, modeSingle},
+	"mono":      {[]int{231}, modeSingle},
+	"mute":      {[]int{243}, modeSingle},
+	"matrix":    {[]int{40}, modeSingle},
+	"rainbow":   {[]int{196, 202, 208, 214, 220, 226, 190, 154, 118, 82, 46, 49, 51, 45, 39, 33, 27, 93, 129, 165, 201, 199, 197}, modePerChar},
+	"pride":     {[]int{196, 208, 226, 46, 27, 129}, modePerLine},
+	"sunset":    {[]int{52, 88, 124, 160, 196, 202, 208, 214, 220, 226, 228}, modePerLine},
+	"ocean":     {[]int{17, 18, 19, 20, 21, 27, 33, 39, 45, 51, 87}, modePerLine},
+	"forest":    {[]int{22, 28, 34, 40, 46, 82, 118, 154, 190}, modePerLine},
+	"stardance": {[]int{93, 99, 141, 177, 213, 219, 159, 123, 87, 51, 45}, modePerChar},
+	"trans":     {[]int{45, 213, 231, 213, 45}, modePerLine},
+}
+
+func colorize(s string, sch scheme, lineIdx int) string {
+	if sch.mode == modeSingle {
+		return ansi(sch.colors[0]) + s + reset
+	}
+	if sch.mode == modePerLine {
+		return ansi(sch.colors[lineIdx%len(sch.colors)]) + s + reset
+	}
+	var b strings.Builder
+	i := 0
+	for _, r := range s {
+		b.WriteString(ansi(sch.colors[(i+lineIdx)%len(sch.colors)]))
+		b.WriteRune(r)
+		i++
+	}
+	b.WriteString(reset)
+	return b.String()
+}
+
+// labelColor picks one ANSI code per line so info labels match the scheme.
+func labelColor(sch scheme, lineIdx int) string {
+	if len(sch.colors) == 0 {
+		return orange
+	}
+	return ansi(sch.colors[lineIdx%len(sch.colors)])
+}
+
+// ─── config ──────────────────────────────────────────────────────────────────
+
+type config struct {
+	APIKey string
+	APIURL string
+}
+
+// cfgPath returns the first existing wakatime config, or the default write path if none found.
+func cfgPath() (string, error) {
+	if h := os.Getenv("WAKATIME_HOME"); h != "" {
+		p := filepath.Join(h, ".wakatime.cfg")
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	candidates := []string{
+		filepath.Join(home, ".wakatime.cfg"),
+		filepath.Join(home, ".wakatime", ".wakatime.cfg"),
+		filepath.Join(home, ".config", "wakatime", ".wakatime.cfg"),
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return candidates[0], nil
+}
+
+// findWakatimeCLI returns the path to wakatime-cli if installed, else "".
+func findWakatimeCLI() string {
+	if p, err := exec.LookPath("wakatime-cli"); err == nil {
+		return p
+	}
+	home, _ := os.UserHomeDir()
+	matches, _ := filepath.Glob(filepath.Join(home, ".wakatime", "wakatime-cli*"))
+	for _, m := range matches {
+		if info, err := os.Stat(m); err == nil && !info.IsDir() && info.Mode()&0111 != 0 {
+			return m
+		}
+	}
+	for _, p := range []string{"/usr/local/bin/wakatime-cli", "/opt/homebrew/bin/wakatime-cli"} {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+// configFileFound checks if a wakatime config file exists at any known location.
+func configFileFound() (path string, ok bool) {
+	p, err := cfgPath()
+	if err != nil {
+		return "", false
+	}
+	if _, err := os.Stat(p); err == nil {
+		return p, true
+	}
+	return p, false
+}
+
+func loadConfig() (*config, error) {
+	path, err := cfgPath()
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	cfg := &config{APIURL: "https://hackatime.hackclub.com/api/hackatime/v1"}
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "[") || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		k := strings.TrimSpace(parts[0])
+		v := strings.TrimSpace(parts[1])
+		switch k {
+		case "api_key", "api-key":
+			cfg.APIKey = v
+		case "api_url":
+			cfg.APIURL = strings.TrimSuffix(v, "/")
+		}
+	}
+	if cfg.APIKey == "" {
+		return nil, fmt.Errorf("no api_key in ~/.wakatime.cfg")
+	}
+	return cfg, nil
+}
+
+func saveAPIKey(key string) error {
+	path, err := cfgPath()
+	if err != nil {
+		return err
+	}
+	existing, _ := os.ReadFile(path)
+	if len(existing) == 0 {
+		content := "[settings]\n" +
+			"api_url = https://hackatime.hackclub.com/api/hackatime/v1\n" +
+			"api_key = " + key + "\n" +
+			"heartbeat_rate_limit_seconds = 30\n"
+		return os.WriteFile(path, []byte(content), 0600)
+	}
+	lines := strings.Split(string(existing), "\n")
+	replaced := false
+	hasSettings := false
+	for i, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "[settings]" {
+			hasSettings = true
+		}
+		if strings.HasPrefix(t, "api_key") || strings.HasPrefix(t, "api-key") {
+			lines[i] = "api_key = " + key
+			replaced = true
+		}
+	}
+	if !replaced {
+		if !hasSettings {
+			lines = append([]string{"[settings]"}, lines...)
+		}
+		lines = append(lines, "api_key = "+key)
+	}
+	out := strings.Join(lines, "\n")
+	if !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	return os.WriteFile(path, []byte(out), 0600)
+}
+
+// ─── api ─────────────────────────────────────────────────────────────────────
+
+func (c *config) nativeBase() string {
+	if i := strings.Index(c.APIURL, "/api/hackatime/"); i >= 0 {
+		return c.APIURL[:i] + "/api/v1"
+	}
+	return c.APIURL
+}
+
+func apiGetURL(cfg *config, url string, into any) error {
+	dbg("GET %s", url)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+strings.TrimPrefix(cfg.APIKey, "waka_"))
+	req.Header.Set("Accept", "application/json")
+	c := &http.Client{Timeout: 10 * time.Second}
+	resp, err := c.Do(req)
+	if err != nil {
+		dbg("transport error: %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	dbg("status=%d body=%.300s", resp.StatusCode, string(body))
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+	return json.Unmarshal(body, into)
+}
+
+func apiGet(cfg *config, path string, into any) error {
+	return apiGetURL(cfg, cfg.APIURL+path, into)
+}
+
+type userInfo struct {
+	Username string
+}
+
+var lastAPIErr error
+
+func fetchUser(cfg *config) *userInfo {
+	var raw map[string]any
+	url := cfg.nativeBase() + "/my/heartbeats/most_recent"
+	if err := apiGetURL(cfg, url, &raw); err != nil {
+		lastAPIErr = err
+		dbg("fetchUser error: %v", err)
+		return nil
+	}
+	if u := findStringField(raw, []string{"username", "user_id", "slack_uid"}); u != "" {
+		return &userInfo{Username: u}
+	}
+	dbg("fetchUser: no username field in response")
+	return nil
+}
+
+func findStringField(v any, keys []string) string {
+	switch t := v.(type) {
+	case map[string]any:
+		for _, k := range keys {
+			if s, ok := t[k].(string); ok && s != "" {
+				return s
+			}
+		}
+		for _, child := range t {
+			if s := findStringField(child, keys); s != "" {
+				return s
+			}
+		}
+	case []any:
+		for _, child := range t {
+			if s := findStringField(child, keys); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+type item struct {
+	Name         string  `json:"name"`
+	TotalSeconds float64 `json:"total_seconds"`
+}
+
+type todayResp struct {
+	Data struct {
+		GrandTotal struct {
+			Seconds float64 `json:"total_seconds"`
+		} `json:"grand_total"`
+		Projects  []item `json:"projects"`
+		Languages []item `json:"languages"`
+		Editors   []item `json:"editors"`
+	} `json:"data"`
+}
+
+type weekResp struct {
+	Data struct {
+		TotalSeconds       float64 `json:"total_seconds"`
+		HumanReadableTotal string  `json:"human_readable_total"`
+		Projects           []item  `json:"projects"`
+		Languages          []item  `json:"languages"`
+		Editors            []item  `json:"editors"`
+	} `json:"data"`
+}
+
+func fetchToday(cfg *config) *todayResp {
+	var r todayResp
+	if err := apiGet(cfg, "/users/current/statusbar/today", &r); err != nil {
+		dbg("fetchToday error: %v", err)
+		return nil
+	}
+	return &r
+}
+
+func fetchWeek(cfg *config) *weekResp {
+	var r weekResp
+	if err := apiGet(cfg, "/users/current/stats/last_7_days", &r); err != nil {
+		dbg("fetchWeek error: %v", err)
+		return nil
+	}
+	return &r
+}
+
+func topItem(items []item) string {
+	best := ""
+	max := 0.0
+	for _, x := range items {
+		n := strings.TrimSpace(x.Name)
+		if n == "" || strings.EqualFold(n, "unknown") || strings.EqualFold(n, "other") {
+			continue
+		}
+		if x.TotalSeconds > max {
+			max = x.TotalSeconds
+			best = x.Name
+		}
+	}
+	if best == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s (%s)", best, fmtDur(max))
+}
+
+// ─── system info ─────────────────────────────────────────────────────────────
+
+func fmtDur(seconds float64) string {
+	if seconds < 1 {
+		return "0m"
+	}
+	h := int(seconds / 3600)
+	m := int((seconds - float64(h)*3600) / 60)
+	if h == 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	if m == 0 {
+		return fmt.Sprintf("%dh", h)
+	}
+	return fmt.Sprintf("%dh %dm", h, m)
+}
+
+func envOr(keys []string, fallback string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return fallback
+}
+
+func getShell() string {
+	s := os.Getenv("SHELL")
+	if s == "" {
+		return "—"
+	}
+	return filepath.Base(s)
+}
+
+func getTerm() string {
+	return envOr([]string{"TERM_PROGRAM", "TERM"}, "—")
+}
+
+func getEditor() string {
+	for _, e := range []string{"VISUAL", "EDITOR"} {
+		if v := os.Getenv(e); v != "" {
+			return filepath.Base(v)
+		}
+	}
+	return "—"
+}
+
+func getOS() string {
+	if runtime.GOOS == "darwin" {
+		out, err := exec.Command("sw_vers", "-productVersion").Output()
+		if err == nil {
+			return "macOS " + strings.TrimSpace(string(out))
+		}
+		return "macOS"
+	}
+	return runtime.GOOS
+}
+
+func getHost() string {
+	h, err := os.Hostname()
+	if err != nil {
+		return "—"
+	}
+	return strings.TrimSuffix(h, ".local")
+}
+
+func getUser() string {
+	return envOr([]string{"USER", "LOGNAME"}, "—")
+}
+
+// ─── setup flow ──────────────────────────────────────────────────────────────
+
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return fmt.Errorf("unsupported os")
+	}
+	return cmd.Start()
+}
+
+const settingsURL = "https://hackatime.hackclub.com/my/wakatime_setup"
+
+func runSetup() (*config, error) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println()
+	fmt.Println("  " + orange + "✦ looking for hackatime…" + reset)
+	fmt.Println()
+
+	cliPath := findWakatimeCLI()
+	cfgFile, cfgExists := configFileFound()
+
+	if cliPath != "" {
+		fmt.Println("  " + green + "✓" + reset + " wakatime-cli: " + dim + cliPath + reset)
+	} else {
+		fmt.Println("  " + dim + "✗ wakatime-cli not found" + reset)
+	}
+	if cfgExists {
+		fmt.Println("  " + green + "✓" + reset + " config file:  " + dim + cfgFile + reset)
+		fmt.Println("  " + dim + "    (file exists but has no api_key — finish setup to add it)" + reset)
+	} else {
+		fmt.Println("  " + dim + "✗ ~/.wakatime.cfg not found" + reset)
+	}
+	fmt.Println()
+	fmt.Println("  " + txt + "finish your hackatime setup here:" + reset)
+	fmt.Println("  " + bold + orange + settingsURL + reset)
+	fmt.Println()
+	fmt.Println("  " + dim + "→ the page walks you through installing wakatime-cli and writing ~/.wakatime.cfg." + reset)
+	fmt.Println("  " + dim + "→ once done, your editor plugins " + reset + bold + "and" + reset + dim + " hackfetch will both work." + reset)
+	fmt.Println()
+	fmt.Print("  " + orange + "open it in your browser? " + dim + "[Y/n] " + reset)
+
+	resp, _ := reader.ReadString('\n')
+	resp = strings.ToLower(strings.TrimSpace(resp))
+	if resp == "" || resp == "y" || resp == "yes" {
+		if err := openBrowser(settingsURL); err != nil {
+			fmt.Println("  " + dim + "(browser open failed — copy the url manually)" + reset)
+		}
+	}
+
+	fmt.Println()
+	fmt.Print("  " + orange + "press " + bold + "[enter]" + reset + orange + " when setup is done, or " + bold + "q" + reset + orange + " to quit: " + reset)
+	resp2, _ := reader.ReadString('\n')
+	if strings.ToLower(strings.TrimSpace(resp2)) == "q" {
+		return nil, fmt.Errorf("canceled")
+	}
+
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("still no api_key in ~/.wakatime.cfg — finish the setup page first, then re-run hackfetch")
+	}
+	fmt.Println()
+	fmt.Println("  " + green + "✓ found your key in ~/.wakatime.cfg" + reset)
+	fmt.Println()
+	return cfg, nil
+}
+
+// ─── render ──────────────────────────────────────────────────────────────────
+
+type field struct {
+	label, value string
+}
+
+func padRunes(s string, w int) string {
+	n := utf8.RuneCountInString(s)
+	if n >= w {
+		return s
+	}
+	return s + strings.Repeat(" ", w-n)
+}
+
+func render(logoLines []string, sch scheme, fields []field) {
+	const lw = 33
+	rows := len(logoLines)
+	if len(fields) > rows {
+		rows = len(fields)
+	}
+	fmt.Println()
+	for i := 0; i < rows; i++ {
+		left := strings.Repeat(" ", lw)
+		if i < len(logoLines) {
+			left = padRunes(logoLines[i], lw)
+		}
+		fmt.Print(colorize(left, sch, i))
+		if i < len(fields) {
+			f := fields[i]
+			if f.label == "" {
+				fmt.Printf("   %s", f.value)
+			} else {
+				fmt.Printf("   %s%-12s%s %s%s%s", labelColor(sch, i), f.label, reset, txt, f.value, reset)
+			}
+		}
+		fmt.Println()
+	}
+	fmt.Println()
+}
+
+// ─── main ────────────────────────────────────────────────────────────────────
+
+func sortedKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func main() {
+	defaultLogo := envOr([]string{"HACKFETCH_LOGO"}, "hackclub")
+	defaultColor := envOr([]string{"HACKFETCH_COLOR"}, "hackclub")
+
+	logoFlag := flag.String("logo", defaultLogo, "logo name (see -list)")
+	colorFlag := flag.String("color", defaultColor, "color scheme (see -list)")
+	setupFlag := flag.Bool("setup", false, "re-run the api key setup flow")
+	listFlag := flag.Bool("list", false, "list available logos and color schemes")
+	noNet := flag.Bool("no-net", false, "skip api calls (offline mode)")
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "hackfetch — hack club system fetch")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "usage:")
+		fmt.Fprintln(os.Stderr, "  hackfetch [logo] [color] [flags]")
+		fmt.Fprintln(os.Stderr, "  hackfetch logo <name> color <name> [flags]")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "examples:")
+		fmt.Fprintln(os.Stderr, "  hackfetch                              # defaults")
+		fmt.Fprintln(os.Stderr, "  hackfetch stardance rainbow            # shorthand")
+		fmt.Fprintln(os.Stderr, "  hackfetch logo flag color pride        # keyword form")
+		fmt.Fprintln(os.Stderr, "  hackfetch -logo orpheus -color ocean   # flag form")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "flags:")
+		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "logos:  "+strings.Join(sortedKeys(logos), ", "))
+		fmt.Fprintln(os.Stderr, "colors: "+strings.Join(sortedKeys(schemes), ", "))
+	}
+	flag.Parse()
+
+	// Allow positional args:
+	//   hackfetch stardance rainbow
+	//   hackfetch logo stardance color rainbow
+	extras := flag.Args()
+	for i := 0; i < len(extras); i++ {
+		a := extras[i]
+		switch a {
+		case "logo":
+			if i+1 < len(extras) {
+				*logoFlag = extras[i+1]
+				i++
+			}
+		case "color":
+			if i+1 < len(extras) {
+				*colorFlag = extras[i+1]
+				i++
+			}
+		case "help", "h":
+			flag.Usage()
+			return
+		default:
+			if _, ok := logos[a]; ok {
+				*logoFlag = a
+			} else if _, ok := schemes[a]; ok {
+				*colorFlag = a
+			} else {
+				fmt.Fprintf(os.Stderr, "unknown arg %q (try -h)\n", a)
+			}
+		}
+	}
+
+	if *listFlag {
+		fmt.Println("logos:")
+		for _, k := range sortedKeys(logos) {
+			fmt.Println("  " + k)
+		}
+		fmt.Println("\ncolors:")
+		for _, k := range sortedKeys(schemes) {
+			fmt.Println("  " + k)
+		}
+		return
+	}
+
+	logoLines, ok := logos[*logoFlag]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown logo %q (try -list)\n", *logoFlag)
+		logoLines = logos["hackclub"]
+	}
+	sch, ok := schemes[*colorFlag]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown color %q (try -list)\n", *colorFlag)
+		sch = schemes["hackclub"]
+	}
+
+	// Force login: refuse to render without a hackatime key, unless -no-net.
+	var cfg *config
+	if !*noNet {
+		c, _ := loadConfig()
+		if *setupFlag {
+			c = nil
+		}
+		for c == nil {
+			nc, err := runSetup()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "  "+dim+"setup failed: "+err.Error()+reset)
+				fmt.Println()
+				os.Exit(1)
+			}
+			c = nc
+		}
+		cfg = c
+	}
+
+	user := getUser()
+	host := getHost()
+	headline := fmt.Sprintf("%s@%s", user, host)
+
+	fields := []field{
+		{"", bold + white + headline + reset},
+		{"", dim + strings.Repeat("─", utf8.RuneCountInString(headline)) + reset},
+		{"os", getOS()},
+		{"shell", getShell()},
+		{"term", getTerm()},
+		{"editor", getEditor()},
+	}
+
+	if cfg != nil && !*noNet {
+		hostName := strings.TrimPrefix(strings.TrimPrefix(cfg.APIURL, "https://"), "http://")
+		if i := strings.Index(hostName, "/"); i >= 0 {
+			hostName = hostName[:i]
+		}
+		fields = append(fields, field{"hackatime", hostName})
+		gotAny := false
+		if u := fetchUser(cfg); u != nil {
+			gotAny = true
+			fields = append(fields, field{"slack", "@" + u.Username})
+		}
+		if t := fetchToday(cfg); t != nil {
+			gotAny = true
+			fields = append(fields, field{"today", fmtDur(t.Data.GrandTotal.Seconds)})
+			if tp := topItem(t.Data.Projects); tp != "" {
+				fields = append(fields, field{"project", tp})
+			}
+			if tl := topItem(t.Data.Languages); tl != "" {
+				fields = append(fields, field{"language", tl})
+			}
+		}
+		if w := fetchWeek(cfg); w != nil {
+			gotAny = true
+			fields = append(fields, field{"7-day total", fmtDur(w.Data.TotalSeconds)})
+			if tp := topItem(w.Data.Projects); tp != "" {
+				fields = append(fields, field{"top project", tp})
+			}
+			if tl := topItem(w.Data.Languages); tl != "" {
+				fields = append(fields, field{"top lang", tl})
+			}
+		}
+		if !gotAny && lastAPIErr != nil {
+			msg := lastAPIErr.Error()
+			if strings.Contains(msg, "401") {
+				msg = "auth failed — rotate key at hackatime.hackclub.com/my/settings/privacy or run `hackfetch -setup`"
+			}
+			fields = append(fields, field{"⚠ api", dim + msg + reset})
+		}
+	} else if *noNet {
+		fields = append(fields, field{"hackatime", dim + "offline (-no-net)" + reset})
+	}
+
+	render(logoLines, sch, fields)
+}
