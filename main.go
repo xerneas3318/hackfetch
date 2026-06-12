@@ -862,6 +862,8 @@ func main() {
 	setupFlag := flag.Bool("setup", false, "re-run the api key setup flow")
 	listFlag := flag.Bool("list", false, "list available logos and color schemes")
 	noNet := flag.Bool("no-net", false, "skip api calls (offline mode)")
+	defaultVerbose := os.Getenv("HACKFETCH_VERBOSE") != ""
+	verboseFlag := flag.Bool("v", defaultVerbose, "verbose: also show editor + category breakdowns (set HACKFETCH_VERBOSE=1 to make default)")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "hackfetch — hack club system fetch")
 		fmt.Fprintln(os.Stderr)
@@ -999,11 +1001,13 @@ func main() {
 					fields = append(fields, field{"files today", fmt.Sprintf("%d", n)})
 				}
 			}
-			if te := topItem(t.Data.Editors); te != "" {
-				fields = append(fields, field{"editor used", te})
-			}
-			if tc := topItem(t.Data.Categories); tc != "" {
-				fields = append(fields, field{"category", tc})
+			if *verboseFlag {
+				if te := topItem(t.Data.Editors); te != "" {
+					fields = append(fields, field{"editor used", te})
+				}
+				if tc := topItem(t.Data.Categories); tc != "" {
+					fields = append(fields, field{"category", tc})
+				}
 			}
 		}
 		if w := fetchWeek(cfg); w != nil {
@@ -1019,11 +1023,13 @@ func main() {
 					fields = append(fields, field{"top lang", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
 				}
 			}
-			if te := topItem(w.Data.Editors); te != "" {
-				fields = append(fields, field{"top editor", te})
-			}
-			if tc := topItem(w.Data.Categories); tc != "" {
-				fields = append(fields, field{"top category", tc})
+			if *verboseFlag {
+				if te := topItem(w.Data.Editors); te != "" {
+					fields = append(fields, field{"top editor", te})
+				}
+				if tc := topItem(w.Data.Categories); tc != "" {
+					fields = append(fields, field{"top category", tc})
+				}
 			}
 			if len(w.Data.Machines) > 1 {
 				fields = append(fields, field{"machines", fmt.Sprintf("%d", len(w.Data.Machines))})
