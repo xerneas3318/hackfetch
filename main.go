@@ -577,6 +577,7 @@ func fetchDailyTotals(cfg *config, daysBack int) []daySummary {
 		dbg("fetchDailyTotals error: %v", err)
 		return nil
 	}
+	dbg("fetchDailyTotals: got %d days", len(r.Data))
 	out := make([]daySummary, len(r.Data))
 	for i, d := range r.Data {
 		out[i] = daySummary{Date: d.Range.Date, Seconds: d.GrandTotal.Seconds}
@@ -585,22 +586,28 @@ func fetchDailyTotals(cfg *config, daysBack int) []daySummary {
 }
 
 // computeStreak counts consecutive active days (>1 min) ending today or yesterday.
+// Falls back to "today has activity = streak of 1" if /summaries is unavailable.
 func computeStreak(cfg *config) int {
-	totals := fetchDailyTotals(cfg, 60)
-	if len(totals) == 0 {
-		return 0
-	}
+	totals := fetchDailyTotals(cfg, 30)
 	active := map[string]bool{}
 	for _, t := range totals {
 		if t.Seconds > 60 {
 			active[t.Date] = true
 		}
 	}
+	if len(active) == 0 {
+		dbg("computeStreak: /summaries gave nothing; falling back to today check")
+		if t := fetchToday(cfg); t != nil && t.Data.GrandTotal.Seconds > 60 {
+			return 1
+		}
+		return 0
+	}
 	cur := time.Now()
 	// Allow yesterday as the starting anchor if today is empty (day isn't over yet).
 	if !active[cur.Format("2006-01-02")] {
 		cur = cur.AddDate(0, 0, -1)
 		if !active[cur.Format("2006-01-02")] {
+			dbg("computeStreak: neither today nor yesterday has activity")
 			return 0
 		}
 	}
@@ -609,6 +616,7 @@ func computeStreak(cfg *config) int {
 		streak++
 		cur = cur.AddDate(0, 0, -1)
 	}
+	dbg("computeStreak: %d days", streak)
 	return streak
 }
 
