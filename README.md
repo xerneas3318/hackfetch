@@ -25,14 +25,6 @@ brew install hackfetch
 go install github.com/xerneas3318/hackfetch@latest
 ```
 
-### From source
-
-```sh
-git clone https://github.com/xerneas3318/hackfetch
-cd hackfetch
-go build -o hackfetch .
-```
-
 ---
 
 ## Setup
