@@ -1,6 +1,6 @@
 # hackfetch
 
-A Hack Club themed system fetch with live [Hackatime](https://hackatime.hackclub.com) stats. Shows your system info next to a customizable Hack Club logo, plus your today/weekly hours, top project, top language, streak, and more — all from your terminal.
+A Hack Club themed system fetch with live [Hackatime](https://hackatime.hackclub.com) stats. Shows your system info next to a customizable Hack Club logo, plus your today/weekly hours, top project, top language, streak, and more - all from your terminal.
 
 Built for [Stardance](https://stardance.hackclub.com) ✦
 
@@ -43,7 +43,7 @@ hackfetch reads `~/.wakatime.cfg`. If you don't have one yet, run Hack Club's of
 curl -fsSL https://raw.githubusercontent.com/hackclub/hackatime-setup/main/install.sh | bash
 ```
 
-Or run `hackfetch -setup` and follow the prompt — it'll walk you through opening [hackatime.hackclub.com/my/wakatime_setup](https://hackatime.hackclub.com/my/wakatime_setup) and waiting for the config to be written.
+Or run `hackfetch -setup` and follow the prompt - it'll walk you through opening [hackatime.hackclub.com/my/wakatime_setup](https://hackatime.hackclub.com/my/wakatime_setup) and waiting for the config to be written.
 
 ---
 
@@ -126,25 +126,25 @@ Run `hackfetch -list` any time to see the current set.
 
 When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fetches and shows:
 
-- **today** — hours coded today
-- **7-day total** — hours coded over the past week
-- **streak** — consecutive days with activity
-- **slack** — your Hack Club / Hackatime handle
-- **top project / project** — most-worked project (today and weekly)
-- **top lang / language** — most-used language (with smart fallback: when Hackatime reports `unknown`, hackfetch infers from file extensions in your heartbeat history and labels it `(inferred)`)
-- **machines** — when you've coded on more than one machine in the past 7 days
-- **top editor / editor used** — *(verbose)* most-used editor (`-v`)
-- **top category / category** — *(verbose)* coding / debugging / building / etc. (`-v`)
+- **today** - hours coded today
+- **7-day total** - hours coded over the past week
+- **streak** - consecutive days with activity
+- **slack** - your Hack Club / Hackatime handle
+- **top project / project** - most-worked project (today and weekly)
+- **top lang / language** - most-used language (with smart fallback: when Hackatime reports `unknown`, hackfetch infers from file extensions in your heartbeat history and labels it `(inferred)`)
+- **machines** - when you've coded on more than one machine in the past 7 days
+- **top editor / editor used** - *(verbose)* most-used editor (`-v`)
+- **top category / category** - *(verbose)* coding / debugging / building / etc. (`-v`)
 
 ---
 
 ## Links
 
-- [Stardance](https://stardance.hackclub.com) — the Hack Club hackathon this was built for
-- [Hackatime](https://hackatime.hackclub.com) — Hack Club's WakaTime-compatible backend
-- [Hack Club](https://hackclub.com) — the worldwide community of teen hackers
-- [nFetch](https://github.com/aaronsbytes/nfetch) — fast, dependency-free Go system-fetch that inspired the architecture here
-- [neofetch](https://github.com/dylanaraps/neofetch) — the original genre-defining fetch (now archived)
+- [Stardance](https://stardance.hackclub.com) - the Hack Club hackathon this was built for
+- [Hackatime](https://hackatime.hackclub.com) - Hack Club's WakaTime-compatible backend
+- [Hack Club](https://hackclub.com) - the worldwide community of teen hackers
+- [nFetch](https://github.com/aaronsbytes/nfetch) - fast, dependency-free Go system-fetch that inspired the architecture here
+- [neofetch](https://github.com/dylanaraps/neofetch) - the original genre-defining fetch (now archived)
 
 ---
 
