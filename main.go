@@ -394,9 +394,10 @@ type todayResp struct {
 		GrandTotal struct {
 			Seconds float64 `json:"total_seconds"`
 		} `json:"grand_total"`
-		Projects  []item `json:"projects"`
-		Languages []item `json:"languages"`
-		Editors   []item `json:"editors"`
+		Projects   []item `json:"projects"`
+		Languages  []item `json:"languages"`
+		Editors    []item `json:"editors"`
+		Categories []item `json:"categories"`
 	} `json:"data"`
 }
 
@@ -407,6 +408,9 @@ type weekResp struct {
 		Projects           []item  `json:"projects"`
 		Languages          []item  `json:"languages"`
 		Editors            []item  `json:"editors"`
+		Categories         []item  `json:"categories"`
+		Machines           []item  `json:"machines"`
+		OperatingSystems   []item  `json:"operating_systems"`
 	} `json:"data"`
 }
 
@@ -501,17 +505,50 @@ func inferTopLang(cfg *config, date string) (string, int) {
 }
 
 var (
-	cachedLang  string
-	cachedFiles int
-	langCached  bool
+	cachedHbs []heartbeat
+	hbsCached bool
 )
 
-func getInferredLang(cfg *config) (string, int) {
-	if !langCached {
-		langCached = true
-		cachedLang, cachedFiles = inferTopLang(cfg, time.Now().Format("2006-01-02"))
+func getTodayHeartbeats(cfg *config) []heartbeat {
+	if !hbsCached {
+		hbsCached = true
+		cachedHbs = fetchHeartbeats(cfg, time.Now().Format("2006-01-02"))
 	}
-	return cachedLang, cachedFiles
+	return cachedHbs
+}
+
+func getInferredLang(cfg *config) (string, int) {
+	hbs := getTodayHeartbeats(cfg)
+	if len(hbs) == 0 {
+		return "", 0
+	}
+	counts := map[string]int{}
+	for _, h := range hbs {
+		if l := inferLanguage(h.Entity); l != "" {
+			counts[l]++
+		}
+	}
+	if len(counts) == 0 {
+		return "", 0
+	}
+	best, max := "", 0
+	for k, v := range counts {
+		if v > max {
+			max, best = v, k
+		}
+	}
+	return best, max
+}
+
+func countUniqueFilesToday(cfg *config) int {
+	hbs := getTodayHeartbeats(cfg)
+	seen := map[string]bool{}
+	for _, h := range hbs {
+		if h.Entity != "" {
+			seen[h.Entity] = true
+		}
+	}
+	return len(seen)
 }
 
 func topItem(items []item) string {
@@ -865,9 +902,15 @@ func main() {
 			} else if len(t.Data.Languages) > 0 {
 				if il, ifc := getInferredLang(cfg); il != "" {
 					fields = append(fields, field{"language", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
-				} else {
-					fields = append(fields, field{"language", dim + "untracked" + reset})
+				} else if n := countUniqueFilesToday(cfg); n > 0 {
+					fields = append(fields, field{"files today", fmt.Sprintf("%d", n)})
 				}
+			}
+			if te := topItem(t.Data.Editors); te != "" {
+				fields = append(fields, field{"editor used", te})
+			}
+			if tc := topItem(t.Data.Categories); tc != "" {
+				fields = append(fields, field{"category", tc})
 			}
 		}
 		if w := fetchWeek(cfg); w != nil {
@@ -881,9 +924,16 @@ func main() {
 			} else if len(w.Data.Languages) > 0 {
 				if il, ifc := getInferredLang(cfg); il != "" {
 					fields = append(fields, field{"top lang", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
-				} else {
-					fields = append(fields, field{"top lang", dim + "untracked" + reset})
 				}
+			}
+			if te := topItem(w.Data.Editors); te != "" {
+				fields = append(fields, field{"top editor", te})
+			}
+			if tc := topItem(w.Data.Categories); tc != "" {
+				fields = append(fields, field{"top category", tc})
+			}
+			if len(w.Data.Machines) > 1 {
+				fields = append(fields, field{"machines", fmt.Sprintf("%d", len(w.Data.Machines))})
 			}
 		}
 		if !gotAny && lastAPIErr != nil {
