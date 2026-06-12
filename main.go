@@ -551,6 +551,87 @@ func countUniqueFilesToday(cfg *config) int {
 	return len(seen)
 }
 
+// ─── streak ──────────────────────────────────────────────────────────────────
+
+type daySummary struct {
+	Date    string
+	Seconds float64
+}
+
+func fetchDailyTotals(cfg *config, daysBack int) []daySummary {
+	end := time.Now()
+	start := end.AddDate(0, 0, -daysBack)
+	var r struct {
+		Data []struct {
+			GrandTotal struct {
+				Seconds float64 `json:"total_seconds"`
+			} `json:"grand_total"`
+			Range struct {
+				Date string `json:"date"`
+			} `json:"range"`
+		} `json:"data"`
+	}
+	path := fmt.Sprintf("/users/current/summaries?start=%s&end=%s",
+		start.Format("2006-01-02"), end.Format("2006-01-02"))
+	if err := apiGet(cfg, path, &r); err != nil {
+		dbg("fetchDailyTotals error: %v", err)
+		return nil
+	}
+	out := make([]daySummary, len(r.Data))
+	for i, d := range r.Data {
+		out[i] = daySummary{Date: d.Range.Date, Seconds: d.GrandTotal.Seconds}
+	}
+	return out
+}
+
+// computeStreak counts consecutive active days (>1 min) ending today or yesterday.
+func computeStreak(cfg *config) int {
+	totals := fetchDailyTotals(cfg, 60)
+	if len(totals) == 0 {
+		return 0
+	}
+	active := map[string]bool{}
+	for _, t := range totals {
+		if t.Seconds > 60 {
+			active[t.Date] = true
+		}
+	}
+	cur := time.Now()
+	// Allow yesterday as the starting anchor if today is empty (day isn't over yet).
+	if !active[cur.Format("2006-01-02")] {
+		cur = cur.AddDate(0, 0, -1)
+		if !active[cur.Format("2006-01-02")] {
+			return 0
+		}
+	}
+	streak := 0
+	for active[cur.Format("2006-01-02")] {
+		streak++
+		cur = cur.AddDate(0, 0, -1)
+	}
+	return streak
+}
+
+var (
+	cachedStreak int
+	streakCached bool
+)
+
+func getStreak(cfg *config) int {
+	if !streakCached {
+		streakCached = true
+		cachedStreak = computeStreak(cfg)
+	}
+	return cachedStreak
+}
+
+func formatStreak(days int) string {
+	if days == 1 {
+		return "1 day"
+	}
+	return fmt.Sprintf("%d days", days)
+}
+
 func topItem(items []item) string {
 	best := ""
 	max := 0.0
@@ -890,6 +971,10 @@ func main() {
 		if u := fetchUser(cfg); u != nil {
 			gotAny = true
 			fields = append(fields, field{"slack", "@" + u.Username})
+		}
+		if s := getStreak(cfg); s > 0 {
+			gotAny = true
+			fields = append(fields, field{"streak", formatStreak(s)})
 		}
 		if t := fetchToday(cfg); t != nil {
 			gotAny = true
