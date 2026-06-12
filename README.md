@@ -90,8 +90,8 @@ export HACKFETCH_VERBOSE=1
   </tr>
   <tr>
     <td align="center">
-      <img src="Images/orpheus-matrix.png" alt="orpheus matrix" width="380"><br>
-      <code>hackfetch orpheus matrix</code>
+      <img src="Images/bot-matrix.png" alt="bot matrix" width="380"><br>
+      <code>hackfetch bot matrix</code>
     </td>
     <td align="center">
       <img src="Images/stardance-ocean.png" alt="stardance ocean" width="380"><br>
@@ -104,7 +104,7 @@ export HACKFETCH_VERBOSE=1
 
 ## Logos
 
-`hackclub` &nbsp; `stardance` &nbsp; `flag` &nbsp; `orpheus` &nbsp; `rocket`
+`hackclub` &nbsp; `stardance` &nbsp; `flag` &nbsp; `orpheus` &nbsp; `bot` &nbsp; `rocket`
 
 ## Color schemes
 
