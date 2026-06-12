@@ -143,7 +143,8 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 - [Stardance](https://stardance.hackclub.com) — the Hack Club hackathon this was built for
 - [Hackatime](https://hackatime.hackclub.com) — Hack Club's WakaTime-compatible backend
 - [Hack Club](https://hackclub.com) — the worldwide community of teen hackers
-- [neofetch](https://github.com/dylanaraps/neofetch) — the original system fetch this is inspired by
+- [nFetch](https://github.com/aaronsbytes/nfetch) — fast, dependency-free Go system-fetch that inspired the architecture here
+- [neofetch](https://github.com/dylanaraps/neofetch) — the original genre-defining fetch (now archived)
 
 ---
 
