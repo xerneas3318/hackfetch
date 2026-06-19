@@ -47,11 +47,15 @@ hackfetch stardance rainbow            # positional shorthand
 hackfetch logo flag color pride        # keyword form
 hackfetch -logo orpheus -color ocean   # flag form
 hackfetch -v                           # verbose: + top editor, top category
+hackfetch -watch                       # live mode, refreshes every 30s
+hackfetch -export card.svg             # save the fetch as a shareable SVG card
 hackfetch -list                        # show all logos and colors
 hackfetch -h                           # help
 hackfetch -setup                       # (re-)configure hackatime
 hackfetch -no-net                      # offline mode
 ```
+
+> **Tip:** flags go before positional args. `hackfetch -export card.svg stardance pride` works; `hackfetch stardance pride -export card.svg` doesn't.
 
 ### Set defaults
 
@@ -117,6 +121,28 @@ export HACKFETCH_VERBOSE=1
 **Special:** `auto` (defaults to `pride` in June, `hackclub` otherwise)
 
 Run `hackfetch -list` for the full set.
+
+---
+
+## Live mode
+
+```sh
+hackfetch -watch
+```
+
+Re-fetches your Hackatime stats every 30 seconds and redraws in place. Today's hours tick up as you code. Ctrl+C to quit.
+
+## Share your fetch
+
+Export the current fetch as a shareable SVG card:
+
+```sh
+hackfetch -export card.svg
+hackfetch -export card.svg stardance pride
+hackfetch -export card.svg -logo orpheus -color rainbow
+```
+
+The output is an SVG with rounded corners, monospace font, and matching colors - perfect for tweeting, posting on Slack, or dropping into a devlog. Open in a browser to view, or convert to PNG with `rsvg-convert` or any image editor.
 
 ---
 

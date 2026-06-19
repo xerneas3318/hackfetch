@@ -964,6 +964,274 @@ func sortedKeys[V any](m map[string]V) []string {
 	return out
 }
 
+// buildFields constructs the field list shown next to the logo.
+// Shared by render and exportSVG so they stay in sync.
+func buildFields(cfg *config, noNet, verbose bool) []field {
+	user := getUser()
+	host := getHost()
+	headline := fmt.Sprintf("%s@%s", user, host)
+
+	fields := []field{
+		{"", bold + white + headline + reset},
+		{"", dim + strings.Repeat("─", utf8.RuneCountInString(headline)) + reset},
+		{"os", getOS()},
+		{"shell", getShell()},
+		{"term", getTerm()},
+		{"editor", getEditor()},
+	}
+
+	if cfg != nil && !noNet {
+		hostName := strings.TrimPrefix(strings.TrimPrefix(cfg.APIURL, "https://"), "http://")
+		if i := strings.Index(hostName, "/"); i >= 0 {
+			hostName = hostName[:i]
+		}
+		fields = append(fields, field{"hackatime", hostName})
+		gotAny := false
+		if u := fetchUser(cfg); u != nil {
+			gotAny = true
+			fields = append(fields, field{"slack", "@" + u.Username})
+		}
+		if s := getStreak(cfg); s > 0 {
+			gotAny = true
+			fields = append(fields, field{"streak", formatStreak(s)})
+		}
+		if dust, ok := getStardust(); ok {
+			gotAny = true
+			fields = append(fields, field{"stardust", fmt.Sprintf("%d ✦", dust)})
+		}
+		if days, ok := daysUntilStardanceEnds(); ok {
+			gotAny = true
+			fields = append(fields, field{"stardance", fmt.Sprintf("%d days left", days)})
+		}
+		if t := fetchToday(cfg); t != nil {
+			gotAny = true
+			fields = append(fields, field{"today", fmtDur(t.Data.GrandTotal.Seconds)})
+			if tp := topItem(t.Data.Projects); tp != "" {
+				fields = append(fields, field{"project", tp})
+			}
+			if tl := topItem(t.Data.Languages); tl != "" {
+				fields = append(fields, field{"language", tl})
+			} else if len(t.Data.Languages) > 0 {
+				if il, ifc := getInferredLang(cfg); il != "" {
+					fields = append(fields, field{"language", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
+				} else if n := countUniqueFilesToday(cfg); n > 0 {
+					fields = append(fields, field{"files today", fmt.Sprintf("%d", n)})
+				}
+			}
+			if verbose {
+				if te := topItem(t.Data.Editors); te != "" {
+					fields = append(fields, field{"editor used", te})
+				}
+				if tc := topItem(t.Data.Categories); tc != "" {
+					fields = append(fields, field{"category", tc})
+				}
+			}
+		}
+		if w := fetchWeek(cfg); w != nil {
+			gotAny = true
+			fields = append(fields, field{"7-day total", fmtDur(w.Data.TotalSeconds)})
+			if tp := topItem(w.Data.Projects); tp != "" {
+				fields = append(fields, field{"top project", tp})
+			}
+			if tl := topItem(w.Data.Languages); tl != "" {
+				fields = append(fields, field{"top lang", tl})
+			} else if len(w.Data.Languages) > 0 {
+				if il, ifc := getInferredLang(cfg); il != "" {
+					fields = append(fields, field{"top lang", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
+				}
+			}
+			if verbose {
+				if te := topItem(w.Data.Editors); te != "" {
+					fields = append(fields, field{"top editor", te})
+				}
+				if tc := topItem(w.Data.Categories); tc != "" {
+					fields = append(fields, field{"top category", tc})
+				}
+			}
+			if len(w.Data.Machines) > 1 {
+				fields = append(fields, field{"machines", fmt.Sprintf("%d", len(w.Data.Machines))})
+			}
+		}
+		if !gotAny && lastAPIErr != nil {
+			msg := lastAPIErr.Error()
+			if strings.Contains(msg, "401") {
+				msg = "auth failed — rotate key at hackatime.hackclub.com/my/settings/privacy or run `hackfetch -setup`"
+			}
+			fields = append(fields, field{"⚠ api", dim + msg + reset})
+		}
+	} else if noNet {
+		fields = append(fields, field{"hackatime", dim + "offline (-no-net)" + reset})
+	}
+
+	return fields
+}
+
+// resetCaches clears memoized API data so a watch-mode loop fetches fresh.
+func resetCaches() {
+	hbsCached = false
+	cachedHbs = nil
+	streakCached = false
+	cachedStreak = 0
+	lastAPIErr = nil
+}
+
+// runWatch re-renders the fetch on an interval until interrupted.
+func runWatch(logoLines []string, sch scheme, cfg *config, noNet, verbose bool, interval time.Duration) {
+	for {
+		resetCaches()
+		fmt.Print("\x1b[2J\x1b[H")
+		fields := buildFields(cfg, noNet, verbose)
+		render(logoLines, sch, fields)
+		fmt.Printf("  %sat %s · refreshes every %ds · ctrl-c to quit%s\n\n",
+			dim, time.Now().Format("15:04:05"), int(interval.Seconds()), reset)
+		time.Sleep(interval)
+	}
+}
+
+// ─── svg export ──────────────────────────────────────────────────────────────
+
+func stripANSI(s string) string {
+	var b strings.Builder
+	n := len(s)
+	for i := 0; i < n; i++ {
+		if s[i] == 0x1b && i+1 < n && s[i+1] == '[' {
+			for i < n && s[i] != 'm' {
+				i++
+			}
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+func escapeXML(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, `"`, "&quot;")
+	return s
+}
+
+// ansi256ToHex maps an ANSI 256-color code to a hex string for SVG fills.
+func ansi256ToHex(code int) string {
+	if code < 0 || code > 255 {
+		return "#ececec"
+	}
+	if code < 16 {
+		std := []string{
+			"#000000", "#cc0000", "#4e9a06", "#c4a000",
+			"#3465a4", "#75507b", "#06989a", "#d3d7cf",
+			"#555753", "#ef2929", "#8ae234", "#fce94f",
+			"#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec",
+		}
+		return std[code]
+	}
+	if code < 232 {
+		n := code - 16
+		r := n / 36
+		g := (n / 6) % 6
+		b := n % 6
+		v := func(x int) int {
+			if x == 0 {
+				return 0
+			}
+			return 55 + x*40
+		}
+		return fmt.Sprintf("#%02x%02x%02x", v(r), v(g), v(b))
+	}
+	v := 8 + (code-232)*10
+	return fmt.Sprintf("#%02x%02x%02x", v, v, v)
+}
+
+func svgLineColor(sch scheme, lineIdx int) string {
+	if len(sch.colors) == 0 {
+		return "#ff8c3a"
+	}
+	return ansi256ToHex(sch.colors[lineIdx%len(sch.colors)])
+}
+
+// svgLogoLine renders a single logo line as SVG tspans honoring the scheme mode.
+func svgLogoLine(sch scheme, line string, lineIdx int) string {
+	if sch.mode != modePerChar {
+		return fmt.Sprintf(`<tspan fill="%s">%s</tspan>`,
+			svgLineColor(sch, lineIdx), escapeXML(line))
+	}
+	var b strings.Builder
+	i := 0
+	for _, r := range line {
+		c := ansi256ToHex(sch.colors[(i+lineIdx)%len(sch.colors)])
+		fmt.Fprintf(&b, `<tspan fill="%s">%s</tspan>`, c, escapeXML(string(r)))
+		i++
+	}
+	return b.String()
+}
+
+// exportSVG writes a shareable card of the fetch as an SVG file.
+func exportSVG(path string, logoLines []string, sch scheme, fields []field) error {
+	const (
+		charW   = 9
+		lineH   = 20
+		padding = 28
+		logoW   = 33
+		sepW    = 3
+		fieldW  = 50
+	)
+
+	rows := len(logoLines)
+	if len(fields) > rows {
+		rows = len(fields)
+	}
+	if rows < 5 {
+		rows = 5
+	}
+
+	width := padding*2 + (logoW+sepW+fieldW)*charW
+	height := padding*2 + (rows+2)*lineH
+
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" font-size="14">`, width, height, width, height)
+	b.WriteString(`<rect width="100%" height="100%" rx="16" ry="16" fill="#0a0a0c"/>`)
+
+	for i := 0; i < rows; i++ {
+		y := padding + (i+1)*lineH
+
+		if i < len(logoLines) {
+			fmt.Fprintf(&b,
+				`<text x="%d" y="%d" xml:space="preserve">%s</text>`,
+				padding, y, svgLogoLine(sch, logoLines[i], i))
+		}
+
+		if i < len(fields) {
+			f := fields[i]
+			x := padding + (logoW+sepW)*charW
+			labelClean := stripANSI(f.label)
+			valueClean := stripANSI(f.value)
+			if labelClean == "" {
+				fmt.Fprintf(&b,
+					`<text x="%d" y="%d" fill="#ececec" xml:space="preserve">%s</text>`,
+					x, y, escapeXML(valueClean))
+			} else {
+				fmt.Fprintf(&b,
+					`<text x="%d" y="%d" fill="%s" xml:space="preserve">%s</text>`,
+					x, y, svgLineColor(sch, i), escapeXML(labelClean))
+				fmt.Fprintf(&b,
+					`<text x="%d" y="%d" fill="#ececec" xml:space="preserve">%s</text>`,
+					x+13*charW, y, escapeXML(valueClean))
+			}
+		}
+	}
+
+	footerY := padding + (rows+1)*lineH + 8
+	fmt.Fprintf(&b,
+		`<text x="%d" y="%d" fill="#757580" font-size="11" xml:space="preserve">hackfetch · github.com/xerneas3318/hackfetch</text>`,
+		padding, footerY)
+
+	b.WriteString(`</svg>`)
+
+	return os.WriteFile(path, []byte(b.String()), 0644)
+}
+
 func main() {
 	loadCustomSchemes()
 
@@ -977,6 +1245,8 @@ func main() {
 	noNet := flag.Bool("no-net", false, "skip api calls (offline mode)")
 	defaultVerbose := os.Getenv("HACKFETCH_VERBOSE") != ""
 	verboseFlag := flag.Bool("v", defaultVerbose, "verbose: also show editor + category breakdowns (set HACKFETCH_VERBOSE=1 to make default)")
+	watchFlag := flag.Bool("watch", false, "live mode: refresh every 30s until ctrl+c")
+	exportFlag := flag.String("export", "", "export the fetch as an SVG card to a file (e.g. card.svg)")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "hackfetch — hack club system fetch")
 		fmt.Fprintln(os.Stderr)
@@ -1074,100 +1344,20 @@ func main() {
 		cfg = c
 	}
 
-	user := getUser()
-	host := getHost()
-	headline := fmt.Sprintf("%s@%s", user, host)
-
-	fields := []field{
-		{"", bold + white + headline + reset},
-		{"", dim + strings.Repeat("─", utf8.RuneCountInString(headline)) + reset},
-		{"os", getOS()},
-		{"shell", getShell()},
-		{"term", getTerm()},
-		{"editor", getEditor()},
+	if *watchFlag {
+		runWatch(logoLines, sch, cfg, *noNet, *verboseFlag, 30*time.Second)
+		return
 	}
 
-	if cfg != nil && !*noNet {
-		hostName := strings.TrimPrefix(strings.TrimPrefix(cfg.APIURL, "https://"), "http://")
-		if i := strings.Index(hostName, "/"); i >= 0 {
-			hostName = hostName[:i]
+	fields := buildFields(cfg, *noNet, *verboseFlag)
+
+	if *exportFlag != "" {
+		if err := exportSVG(*exportFlag, logoLines, sch, fields); err != nil {
+			fmt.Fprintf(os.Stderr, "export failed: %v\n", err)
+			os.Exit(1)
 		}
-		fields = append(fields, field{"hackatime", hostName})
-		gotAny := false
-		if u := fetchUser(cfg); u != nil {
-			gotAny = true
-			fields = append(fields, field{"slack", "@" + u.Username})
-		}
-		if s := getStreak(cfg); s > 0 {
-			gotAny = true
-			fields = append(fields, field{"streak", formatStreak(s)})
-		}
-		if dust, ok := getStardust(); ok {
-			gotAny = true
-			fields = append(fields, field{"stardust", fmt.Sprintf("%d ✦", dust)})
-		}
-		if days, ok := daysUntilStardanceEnds(); ok {
-			gotAny = true
-			fields = append(fields, field{"stardance", fmt.Sprintf("%d days left", days)})
-		}
-		if t := fetchToday(cfg); t != nil {
-			gotAny = true
-			fields = append(fields, field{"today", fmtDur(t.Data.GrandTotal.Seconds)})
-			if tp := topItem(t.Data.Projects); tp != "" {
-				fields = append(fields, field{"project", tp})
-			}
-			if tl := topItem(t.Data.Languages); tl != "" {
-				fields = append(fields, field{"language", tl})
-			} else if len(t.Data.Languages) > 0 {
-				if il, ifc := getInferredLang(cfg); il != "" {
-					fields = append(fields, field{"language", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
-				} else if n := countUniqueFilesToday(cfg); n > 0 {
-					fields = append(fields, field{"files today", fmt.Sprintf("%d", n)})
-				}
-			}
-			if *verboseFlag {
-				if te := topItem(t.Data.Editors); te != "" {
-					fields = append(fields, field{"editor used", te})
-				}
-				if tc := topItem(t.Data.Categories); tc != "" {
-					fields = append(fields, field{"category", tc})
-				}
-			}
-		}
-		if w := fetchWeek(cfg); w != nil {
-			gotAny = true
-			fields = append(fields, field{"7-day total", fmtDur(w.Data.TotalSeconds)})
-			if tp := topItem(w.Data.Projects); tp != "" {
-				fields = append(fields, field{"top project", tp})
-			}
-			if tl := topItem(w.Data.Languages); tl != "" {
-				fields = append(fields, field{"top lang", tl})
-			} else if len(w.Data.Languages) > 0 {
-				if il, ifc := getInferredLang(cfg); il != "" {
-					fields = append(fields, field{"top lang", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
-				}
-			}
-			if *verboseFlag {
-				if te := topItem(w.Data.Editors); te != "" {
-					fields = append(fields, field{"top editor", te})
-				}
-				if tc := topItem(w.Data.Categories); tc != "" {
-					fields = append(fields, field{"top category", tc})
-				}
-			}
-			if len(w.Data.Machines) > 1 {
-				fields = append(fields, field{"machines", fmt.Sprintf("%d", len(w.Data.Machines))})
-			}
-		}
-		if !gotAny && lastAPIErr != nil {
-			msg := lastAPIErr.Error()
-			if strings.Contains(msg, "401") {
-				msg = "auth failed — rotate key at hackatime.hackclub.com/my/settings/privacy or run `hackfetch -setup`"
-			}
-			fields = append(fields, field{"⚠ api", dim + msg + reset})
-		}
-	} else if *noNet {
-		fields = append(fields, field{"hackatime", dim + "offline (-no-net)" + reset})
+		fmt.Printf("✓ wrote %s\n", *exportFlag)
+		return
 	}
 
 	render(logoLines, sch, fields)
