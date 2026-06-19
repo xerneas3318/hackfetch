@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -147,6 +148,25 @@ var schemes = map[string]scheme{
 	"forest":    {[]int{22, 28, 34, 40, 46, 82, 118, 154, 190}, modePerLine},
 	"stardance": {[]int{93, 99, 141, 177, 213, 219, 159, 123, 87, 51, 45}, modePerChar},
 	"trans":     {[]int{45, 213, 231, 213, 45}, modePerLine},
+
+	// Pride flag pack
+	"bi":          {[]int{199, 99, 27}, modePerLine},
+	"bisexual":    {[]int{199, 99, 27}, modePerLine},
+	"lesbian":     {[]int{124, 166, 208, 231, 218, 199, 161}, modePerLine},
+	"pan":         {[]int{199, 226, 33}, modePerLine},
+	"pansexual":   {[]int{199, 226, 33}, modePerLine},
+	"nonbinary":   {[]int{226, 231, 99, 240}, modePerLine},
+	"nb":          {[]int{226, 231, 99, 240}, modePerLine},
+	"ace":         {[]int{240, 248, 231, 99}, modePerLine},
+	"asexual":     {[]int{240, 248, 231, 99}, modePerLine},
+	"aro":         {[]int{28, 41, 231, 248, 240}, modePerLine},
+	"aromantic":   {[]int{28, 41, 231, 248, 240}, modePerLine},
+	"agender":     {[]int{240, 248, 231, 41, 231, 248, 240}, modePerLine},
+	"genderfluid": {[]int{199, 231, 99, 240, 27}, modePerLine},
+	"intersex":    {[]int{226, 99}, modePerLine},
+	"demi":        {[]int{240, 248, 231, 99}, modePerLine},
+	"poly":        {[]int{27, 196, 240}, modePerLine},
+	"progress":    {[]int{196, 208, 226, 46, 27, 129, 240, 218, 45, 231}, modePerLine},
 }
 
 func colorize(s string, sch scheme, lineIdx int) string {
@@ -173,6 +193,87 @@ func labelColor(sch scheme, lineIdx int) string {
 		return orange
 	}
 	return ansi(sch.colors[lineIdx%len(sch.colors)])
+}
+
+// loadCustomSchemes reads ~/.config/hackfetch/colors.json and merges into schemes.
+// User entries override built-ins of the same name.
+// Format:
+//
+//	{ "schemes": { "mytheme": { "colors": [196, 202, 208], "mode": "per-line" } } }
+func loadCustomSchemes() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(home, ".config", "hackfetch", "colors.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var cfg struct {
+		Schemes map[string]struct {
+			Colors []int  `json:"colors"`
+			Mode   string `json:"mode"`
+		} `json:"schemes"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		dbg("custom schemes parse error: %v", err)
+		return
+	}
+	for name, s := range cfg.Schemes {
+		if len(s.Colors) == 0 {
+			continue
+		}
+		var mode colorMode
+		switch strings.ToLower(s.Mode) {
+		case "per-line", "perline", "line", "band":
+			mode = modePerLine
+		case "per-char", "perchar", "char", "rainbow":
+			mode = modePerChar
+		default:
+			mode = modeSingle
+		}
+		schemes[name] = scheme{colors: s.Colors, mode: mode}
+	}
+}
+
+// resolveAutoScheme returns the scheme name when -color auto is requested.
+// In Pride Month (June), defaults to pride. Otherwise, hackclub.
+func resolveAutoScheme() string {
+	if time.Now().Month() == time.June {
+		return "pride"
+	}
+	return "hackclub"
+}
+
+// ─── stardance ───────────────────────────────────────────────────────────────
+
+const stardanceEnd = "2026-09-30"
+
+// daysUntilStardanceEnds returns days remaining and true if Stardance is still on.
+func daysUntilStardanceEnds() (int, bool) {
+	end, err := time.Parse("2006-01-02", stardanceEnd)
+	if err != nil {
+		return 0, false
+	}
+	d := int(time.Until(end).Hours() / 24)
+	if d < 0 {
+		return 0, false
+	}
+	return d, true
+}
+
+// getStardust reads HACKFETCH_STARDUST env var as the user's stardust count.
+func getStardust() (int, bool) {
+	v := strings.TrimSpace(os.Getenv("HACKFETCH_STARDUST"))
+	if v == "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 // ─── config ──────────────────────────────────────────────────────────────────
@@ -864,6 +965,8 @@ func sortedKeys[V any](m map[string]V) []string {
 }
 
 func main() {
+	loadCustomSchemes()
+
 	defaultLogo := envOr([]string{"HACKFETCH_LOGO"}, "hackclub")
 	defaultColor := envOr([]string{"HACKFETCH_COLOR"}, "hackclub")
 
@@ -943,6 +1046,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unknown logo %q (try -list)\n", *logoFlag)
 		logoLines = logos["hackclub"]
 	}
+	if *colorFlag == "auto" {
+		*colorFlag = resolveAutoScheme()
+	}
 	sch, ok := schemes[*colorFlag]
 	if !ok {
 		fmt.Fprintf(os.Stderr, "unknown color %q (try -list)\n", *colorFlag)
@@ -995,6 +1101,14 @@ func main() {
 		if s := getStreak(cfg); s > 0 {
 			gotAny = true
 			fields = append(fields, field{"streak", formatStreak(s)})
+		}
+		if dust, ok := getStardust(); ok {
+			gotAny = true
+			fields = append(fields, field{"stardust", fmt.Sprintf("%d ✦", dust)})
+		}
+		if days, ok := daysUntilStardanceEnds(); ok {
+			gotAny = true
+			fields = append(fields, field{"stardance", fmt.Sprintf("%d days left", days)})
 		}
 		if t := fetchToday(cfg); t != nil {
 			gotAny = true
