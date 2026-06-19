@@ -108,9 +108,44 @@ export HACKFETCH_VERBOSE=1
 
 ## Color schemes
 
-`hackclub` &nbsp; `orange` &nbsp; `mono` &nbsp; `mute` &nbsp; `matrix` &nbsp; `rainbow` &nbsp; `pride` &nbsp; `sunset` &nbsp; `ocean` &nbsp; `forest` &nbsp; `stardance` &nbsp; `trans`
+**Basics:** `hackclub` &nbsp; `orange` &nbsp; `mono` &nbsp; `mute` &nbsp; `matrix`
 
-Run `hackfetch -list` any time to see the current set.
+**Gradients & rainbows:** `rainbow` &nbsp; `sunset` &nbsp; `ocean` &nbsp; `forest` &nbsp; `stardance`
+
+**Pride flags:** `pride` &nbsp; `progress` &nbsp; `trans` &nbsp; `bi` &nbsp; `lesbian` &nbsp; `pan` &nbsp; `nonbinary` &nbsp; `ace` &nbsp; `aro` &nbsp; `agender` &nbsp; `genderfluid` &nbsp; `intersex` &nbsp; `demi` &nbsp; `poly`
+
+**Special:** `auto` (defaults to `pride` in June, `hackclub` otherwise)
+
+Run `hackfetch -list` for the full set.
+
+---
+
+## Custom themes
+
+Define your own color schemes in `~/.config/hackfetch/colors.json`:
+
+```json
+{
+  "schemes": {
+    "vaporwave": {
+      "colors": [199, 165, 99, 51],
+      "mode": "per-line"
+    },
+    "fire": {
+      "colors": [196, 202, 208, 214, 220, 226],
+      "mode": "per-char"
+    }
+  }
+}
+```
+
+`mode` can be `single`, `per-line`, or `per-char`. `colors` are [ANSI 256 color codes](https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit). Your themes override built-ins of the same name.
+
+Then run:
+
+```sh
+hackfetch -color vaporwave
+```
 
 ---
 
@@ -121,6 +156,8 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 - **today** - hours coded today
 - **7-day total** - hours coded over the past week
 - **streak** - consecutive days with activity
+- **stardust** ✦ - your stardust count (set via `HACKFETCH_STARDUST=N` env var)
+- **stardance** - days left until Stardance ends (auto-hides after Sep 30, 2026)
 - **slack** - your Hack Club / Hackatime handle
 - **top project / project** - most-worked project (today and weekly)
 - **top lang / language** - most-used language (with smart fallback: when Hackatime reports `unknown`, hackfetch infers from file extensions in your heartbeat history and labels it `(inferred)`)
