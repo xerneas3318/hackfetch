@@ -116,7 +116,7 @@ export HACKFETCH_VERBOSE=1
 
 **Gradients & rainbows:** `rainbow` &nbsp; `sunset` &nbsp; `ocean` &nbsp; `forest` &nbsp; `stardance`
 
-**Pride flags:** `pride` &nbsp; `progress` &nbsp; `trans` &nbsp; `bi` &nbsp; `lesbian` &nbsp; `pan` &nbsp; `nonbinary` &nbsp; `ace` &nbsp; `aro` &nbsp; `agender` &nbsp; `genderfluid` &nbsp; `intersex` &nbsp; `demi` &nbsp; `poly`
+**Pride flags:** `pride` &nbsp; `trans` &nbsp; `bi` &nbsp; `pan`
 
 **Special:** `auto` (defaults to `pride` in June, `hackclub` otherwise)
 
