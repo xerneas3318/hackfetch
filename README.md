@@ -12,11 +12,25 @@ Built for [Stardance](https://stardance.hackclub.com) ✦
 
 ## Install
 
-### Homebrew
+### Homebrew (macOS + Linuxbrew)
 
 ```sh
 brew tap xerneas3318/tap
 brew install hackfetch
+```
+
+### Linux / one-liner (no Go required)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | bash
+```
+
+Detects your OS/arch, downloads the matching pre-built binary from GitHub Releases, installs to `/usr/local/bin` (or `~/.local/bin` if no sudo). Works on Linux and macOS.
+
+Override the install location with an env var:
+
+```sh
+HACKFETCH_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | bash
 ```
 
 ### Go

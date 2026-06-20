@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Build cross-platform binaries
+        env:
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          for os in linux darwin; do
+            for arch in amd64 arm64; do
+              echo "Building hackfetch-$os-$arch..."
+              mkdir -p build/$os-$arch
+              GOOS=$os GOARCH=$arch go build \
+                -trimpath \
+                -ldflags '-s -w' \
+                -o build/$os-$arch/hackfetch \
+                ./
+              tar -czf dist/hackfetch-$os-$arch.tar.gz -C build/$os-$arch hackfetch
+            done
+          done
+          ls -la dist/
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Create release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release create "${{ github.ref_name }}" \
+              --title "hackfetch ${{ github.ref_name }}" \
+              --notes "Automated release. Binaries built by CI."
+          fi
+
+      - name: Upload binaries to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            dist/*.tar.gz \
+            dist/checksums.txt \
+            --clobber
