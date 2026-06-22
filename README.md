@@ -12,16 +12,16 @@ Built for [Stardance](https://stardance.hackclub.com) ✦
 
 ## Install
 
-### One-liner — Linux + macOS
+### Linux + macOS
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | sh
 ```
 
-Works on **any major distro** — Ubuntu, Debian, Fedora, RHEL, CentOS, Arch, openSUSE, Alpine — and macOS. The installer:
+Works on **any major distro** (Ubuntu, Debian, Fedora, RHEL, CentOS, Arch, openSUSE, Alpine) and macOS. The installer:
 
 - detects your OS/arch (Linux x86_64/arm64, macOS Intel/Apple Silicon)
-- **auto-installs prereqs** (`curl`, `tar`, `xdg-utils`) via your system's package manager — `apt`, `dnf`, `yum`, `pacman`, `zypper`, `apk`, or `brew`
+- **auto-installs prereqs** (`curl`, `tar`, `xdg-utils`) via your system's package manager (`apt`, `dnf`, `yum`, `pacman`, `zypper`, `apk`, or `brew`)
 - downloads the matching pre-built binary from GitHub Releases
 - installs to `/usr/local/bin` (using `sudo` if needed) or falls back to `~/.local/bin`
 - is POSIX `sh`-compatible, so it works on Alpine/BusyBox and minimal containers too
@@ -32,7 +32,7 @@ Override the install location:
 HACKFETCH_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | sh
 ```
 
-### One-liner — Windows (PowerShell)
+### Windows (PowerShell)
 
 ```powershell
 irm https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.ps1 | iex
