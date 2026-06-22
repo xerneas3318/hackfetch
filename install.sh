@@ -1,47 +1,140 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # hackfetch installer
-# usage: curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | bash
-# optional env: HACKFETCH_INSTALL_DIR=~/.local/bin to override install location
+# usage:   curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | sh
+# override install dir:
+#   HACKFETCH_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | sh
+#
+# POSIX sh compatible. Auto-installs prereqs (curl, tar) on Linux via the
+# system package manager when possible. Works on Linux (glibc + musl) and macOS.
 
-set -euo pipefail
+set -eu
 
 REPO="xerneas3318/hackfetch"
 INSTALL_DIR="${HACKFETCH_INSTALL_DIR:-}"
 
-bold=$'\033[1m'
-green=$'\033[0;32m'
-orange=$'\033[0;38;5;208m'
-red=$'\033[0;31m'
-dim=$'\033[2m'
-reset=$'\033[0m'
+# --- colors (only when stdout is a tty)
+if [ -t 1 ]; then
+  bold=$(printf '\033[1m')
+  green=$(printf '\033[0;32m')
+  orange=$(printf '\033[0;38;5;208m')
+  red=$(printf '\033[0;31m')
+  dim=$(printf '\033[2m')
+  reset=$(printf '\033[0m')
+else
+  bold=""; green=""; orange=""; red=""; dim=""; reset=""
+fi
 
 say() { printf '%s\n' "$*"; }
+have() { command -v "$1" >/dev/null 2>&1; }
 
-# --- requirements
-for tool in curl tar; do
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    say "${red}error:${reset} $tool is required but not installed"
-    exit 1
+# --- pick a sudo prefix when we need one
+sudo_prefix() {
+  if [ "$(id -u)" = "0" ]; then
+    printf ''
+  elif have sudo; then
+    printf 'sudo'
+  else
+    printf ''
   fi
-done
+}
 
-# --- detect platform
-case "$(uname -s)" in
-  Linux)  os="linux" ;;
-  Darwin) os="darwin" ;;
-  *) say "${red}error:${reset} unsupported os: $(uname -s)"; exit 1 ;;
-esac
-case "$(uname -m)" in
-  x86_64|amd64)  arch="amd64" ;;
-  aarch64|arm64) arch="arm64" ;;
-  *) say "${red}error:${reset} unsupported arch: $(uname -m)"; exit 1 ;;
-esac
-platform="$os-$arch"
+# --- detect linux package manager
+detect_pm() {
+  if have apt-get; then echo apt
+  elif have dnf;     then echo dnf
+  elif have yum;     then echo yum
+  elif have pacman;  then echo pacman
+  elif have zypper;  then echo zypper
+  elif have apk;     then echo apk
+  elif have brew;    then echo brew
+  else echo ""
+  fi
+}
+
+# --- install a list of packages via the detected pm
+pm_install() {
+  pm=$1; shift
+  pkgs=$*
+  SUDO=$(sudo_prefix)
+  case "$pm" in
+    apt)    $SUDO apt-get update -y >/dev/null && $SUDO apt-get install -y $pkgs ;;
+    dnf)    $SUDO dnf install -y $pkgs ;;
+    yum)    $SUDO yum install -y $pkgs ;;
+    pacman) $SUDO pacman -Sy --noconfirm --needed $pkgs ;;
+    zypper) $SUDO zypper --non-interactive install $pkgs ;;
+    apk)    $SUDO apk add --no-cache $pkgs ;;
+    brew)   brew install $pkgs ;;
+    *)      return 1 ;;
+  esac
+}
+
+# --- ensure a tool is present; try to install it if missing
+ensure_tool() {
+  tool=$1
+  pkg=${2:-$1}
+  if have "$tool"; then return 0; fi
+  pm=$(detect_pm)
+  if [ -z "$pm" ]; then
+    say "  ${red}error:${reset} $tool is required but no supported package manager was found"
+    say "  ${dim}install $tool manually and re-run${reset}"
+    return 1
+  fi
+  say "  ${dim}+ installing missing prereq: $tool (via $pm)${reset}"
+  if ! pm_install "$pm" "$pkg" >/dev/null 2>&1; then
+    say "  ${red}error:${reset} failed to install $tool via $pm"
+    say "  ${dim}install $tool manually and re-run${reset}"
+    return 1
+  fi
+}
 
 # --- header
 say ""
 say "  ${orange}✦ hackfetch installer${reset}"
 say ""
+
+# --- prereqs: curl + tar are required. on Linux setup, xdg-open is nice for -setup.
+os_name=$(uname -s)
+case "$os_name" in
+  Linux)
+    ensure_tool curl curl
+    ensure_tool tar  tar
+    # xdg-open is optional but used by `hackfetch -setup` to open the auth page.
+    if ! have xdg-open; then
+      pm=$(detect_pm)
+      if [ -n "$pm" ]; then
+        say "  ${dim}+ installing optional: xdg-utils (for hackfetch -setup)${reset}"
+        case "$pm" in
+          apk) pm_install "$pm" xdg-utils >/dev/null 2>&1 || true ;;
+          *)   pm_install "$pm" xdg-utils >/dev/null 2>&1 || true ;;
+        esac
+      fi
+    fi
+    ;;
+  Darwin)
+    # macOS ships curl + tar. nothing to install.
+    if ! have curl || ! have tar; then
+      say "  ${red}error:${reset} curl and tar are required (and missing). install Xcode CLT: xcode-select --install"
+      exit 1
+    fi
+    ;;
+  *)
+    say "  ${red}error:${reset} unsupported os: $os_name"
+    exit 1
+    ;;
+esac
+
+# --- detect platform
+case "$os_name" in
+  Linux)  os="linux" ;;
+  Darwin) os="darwin" ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64)  arch="amd64" ;;
+  aarch64|arm64) arch="arm64" ;;
+  *) say "  ${red}error:${reset} unsupported arch: $(uname -m)"; exit 1 ;;
+esac
+platform="$os-$arch"
+
 say "  ${green}✓${reset} detected: ${bold}$platform${reset}"
 
 # --- pick install dir
@@ -51,7 +144,7 @@ if [ -z "$INSTALL_DIR" ]; then
     INSTALL_DIR="/usr/local/bin"
   elif [ "$(id -u)" = "0" ]; then
     INSTALL_DIR="/usr/local/bin"
-  elif command -v sudo >/dev/null 2>&1; then
+  elif have sudo; then
     INSTALL_DIR="/usr/local/bin"
     SUDO="sudo"
   else
@@ -60,7 +153,7 @@ if [ -z "$INSTALL_DIR" ]; then
   fi
 fi
 
-# --- latest release
+# --- latest release tag
 say "  ${dim}→ checking latest release...${reset}"
 latest=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
   | grep '"tag_name"' \
@@ -78,7 +171,7 @@ url="https://github.com/$REPO/releases/download/$latest/hackfetch-$platform.tar.
 
 # --- download + extract
 tmpdir=$(mktemp -d)
-trap 'rm -rf "$tmpdir"' EXIT
+trap 'rm -rf "$tmpdir"' EXIT INT TERM HUP
 
 say "  ${dim}↓ downloading $url${reset}"
 if ! curl -fsSL "$url" -o "$tmpdir/hackfetch.tar.gz"; then
