@@ -12,6 +12,46 @@ Built for [Stardance](https://stardance.hackclub.com) ✦
 
 ## Install
 
+### One-liner — Linux + macOS
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | sh
+```
+
+Works on **any major distro** — Ubuntu, Debian, Fedora, RHEL, CentOS, Arch, openSUSE, Alpine — and macOS. The installer:
+
+- detects your OS/arch (Linux x86_64/arm64, macOS Intel/Apple Silicon)
+- **auto-installs prereqs** (`curl`, `tar`, `xdg-utils`) via your system's package manager — `apt`, `dnf`, `yum`, `pacman`, `zypper`, `apk`, or `brew`
+- downloads the matching pre-built binary from GitHub Releases
+- installs to `/usr/local/bin` (using `sudo` if needed) or falls back to `~/.local/bin`
+- is POSIX `sh`-compatible, so it works on Alpine/BusyBox and minimal containers too
+
+Override the install location:
+
+```sh
+HACKFETCH_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | sh
+```
+
+### One-liner — Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.ps1 | iex
+```
+
+Works on Windows 10 / 11 (x64 and ARM64). The installer:
+
+- detects your CPU arch
+- downloads the matching `hackfetch-windows-<arch>.zip` from GitHub Releases
+- installs `hackfetch.exe` to `%LOCALAPPDATA%\Programs\hackfetch`
+- adds that folder to your **user** `PATH` (open a new terminal to pick it up)
+
+Override the install location:
+
+```powershell
+$env:HACKFETCH_INSTALL_DIR = 'C:\tools\hackfetch'
+irm https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.ps1 | iex
+```
+
 ### Homebrew (macOS + Linuxbrew)
 
 ```sh
@@ -19,21 +59,7 @@ brew tap xerneas3318/tap
 brew install hackfetch
 ```
 
-### Linux
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | bash
-```
-
-Detects your OS/arch, downloads the matching pre-built binary from GitHub Releases, installs to `/usr/local/bin` (or `~/.local/bin` if no sudo). Works on Linux and macOS.
-
-Override the install location with an env var:
-
-```sh
-HACKFETCH_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | bash
-```
-
-### Go
+### Go (any platform with Go installed)
 
 ```sh
 go install github.com/xerneas3318/hackfetch@latest
