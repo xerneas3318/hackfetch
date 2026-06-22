@@ -19,7 +19,7 @@ brew tap xerneas3318/tap
 brew install hackfetch
 ```
 
-### Linux / one-liner (no Go required)
+### Linux
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/xerneas3318/hackfetch/main/install.sh | bash
