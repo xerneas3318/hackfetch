@@ -2,9 +2,15 @@ package main
 
 import (
 	"bufio"
+	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -16,7 +22,14 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/math/fixed"
 )
+
+//go:embed assets/DejaVuSansMono.ttf
+var embeddedFontData []byte
 
 var debug = os.Getenv("HACKFETCH_DEBUG") != ""
 
@@ -1219,6 +1232,184 @@ func exportSVG(path string, logoLines []string, sch scheme, fields []field) erro
 	return os.WriteFile(path, []byte(b.String()), 0644)
 }
 
+// ─── raster export (PNG / JPEG) ─────────────────────────────────────────────
+
+var cachedRasterFace font.Face
+
+func rasterFontFace() (font.Face, error) {
+	if cachedRasterFace != nil {
+		return cachedRasterFace, nil
+	}
+	parsed, err := opentype.Parse(embeddedFontData)
+	if err != nil {
+		return nil, fmt.Errorf("parse embedded font: %w", err)
+	}
+	face, err := opentype.NewFace(parsed, &opentype.FaceOptions{
+		Size:    16,
+		DPI:     144,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create font face: %w", err)
+	}
+	cachedRasterFace = face
+	return face, nil
+}
+
+func hexToRGBA(hex string) color.RGBA {
+	if len(hex) < 7 || hex[0] != '#' {
+		return color.RGBA{0xec, 0xec, 0xec, 0xff}
+	}
+	r, _ := strconv.ParseUint(hex[1:3], 16, 8)
+	g, _ := strconv.ParseUint(hex[3:5], 16, 8)
+	b, _ := strconv.ParseUint(hex[5:7], 16, 8)
+	return color.RGBA{uint8(r), uint8(g), uint8(b), 0xff}
+}
+
+// fillRoundedRect fills a rectangle with rounded corners into an RGBA image.
+func fillRoundedRect(img *image.RGBA, r image.Rectangle, radius int, col color.Color) {
+	rr := radius * radius
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		for x := r.Min.X; x < r.Max.X; x++ {
+			// only test the four corner squares; the interior fills straight
+			var dx, dy int
+			switch {
+			case x < r.Min.X+radius && y < r.Min.Y+radius:
+				dx = (r.Min.X + radius) - x
+				dy = (r.Min.Y + radius) - y
+			case x >= r.Max.X-radius && y < r.Min.Y+radius:
+				dx = x - (r.Max.X - radius - 1)
+				dy = (r.Min.Y + radius) - y
+			case x < r.Min.X+radius && y >= r.Max.Y-radius:
+				dx = (r.Min.X + radius) - x
+				dy = y - (r.Max.Y - radius - 1)
+			case x >= r.Max.X-radius && y >= r.Max.Y-radius:
+				dx = x - (r.Max.X - radius - 1)
+				dy = y - (r.Max.Y - radius - 1)
+			default:
+				img.Set(x, y, col)
+				continue
+			}
+			if dx*dx+dy*dy <= rr {
+				img.Set(x, y, col)
+			}
+		}
+	}
+}
+
+// drawRasterText draws a string in the given color at (x, y) baseline.
+func drawRasterText(img *image.RGBA, face font.Face, x, y int, s string, col color.Color) {
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(col),
+		Face: face,
+		Dot:  fixed.P(x, y),
+	}
+	d.DrawString(s)
+}
+
+// drawRasterLogoLine draws one logo line honoring per-line vs per-char colors.
+func drawRasterLogoLine(img *image.RGBA, face font.Face, x, y int, line string, sch scheme, lineIdx, charAdvance int) {
+	if sch.mode != modePerChar {
+		drawRasterText(img, face, x, y, line, hexToRGBA(svgLineColor(sch, lineIdx)))
+		return
+	}
+	col := 0
+	for _, r := range line {
+		c := hexToRGBA(ansi256ToHex(sch.colors[(col+lineIdx)%len(sch.colors)]))
+		drawRasterText(img, face, x+col*charAdvance, y, string(r), c)
+		col++
+	}
+}
+
+// exportRaster writes a shareable card as a PNG or JPEG file. Layout mirrors exportSVG.
+func exportRaster(path string, logoLines []string, sch scheme, fields []field, format string) error {
+	face, err := rasterFontFace()
+	if err != nil {
+		return err
+	}
+
+	// derive a fixed character advance from the font (monospace guarantees uniformity)
+	advM, _ := face.GlyphAdvance('M')
+	charW := advM.Ceil()
+	if charW < 1 {
+		charW = 14
+	}
+	lineH := face.Metrics().Height.Ceil() + 6
+	if lineH < 20 {
+		lineH = 32
+	}
+	padding := 44
+	const (
+		logoW  = 33
+		sepW   = 3
+		fieldW = 50
+	)
+
+	rows := len(logoLines)
+	if len(fields) > rows {
+		rows = len(fields)
+	}
+	if rows < 5 {
+		rows = 5
+	}
+
+	width := padding*2 + (logoW+sepW+fieldW)*charW
+	height := padding*2 + (rows+2)*lineH
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	// transparent background outside the rounded rect (rendered as black for JPEG)
+	draw.Draw(img, img.Bounds(), &image.Uniform{color.RGBA{0, 0, 0, 0}}, image.Point{}, draw.Src)
+	// dark card with rounded corners
+	fillRoundedRect(img, img.Bounds(), 24, color.RGBA{0x0a, 0x0a, 0x0c, 0xff})
+
+	textColor := color.RGBA{0xec, 0xec, 0xec, 0xff}
+	dimColor := color.RGBA{0x75, 0x75, 0x80, 0xff}
+
+	for i := 0; i < rows; i++ {
+		y := padding + (i+1)*lineH
+
+		if i < len(logoLines) {
+			drawRasterLogoLine(img, face, padding, y, logoLines[i], sch, i, charW)
+		}
+
+		if i < len(fields) {
+			f := fields[i]
+			x := padding + (logoW+sepW)*charW
+			labelClean := stripANSI(f.label)
+			valueClean := stripANSI(f.value)
+			if labelClean == "" {
+				drawRasterText(img, face, x, y, valueClean, textColor)
+			} else {
+				drawRasterText(img, face, x, y, labelClean, hexToRGBA(svgLineColor(sch, i)))
+				drawRasterText(img, face, x+13*charW, y, valueClean, textColor)
+			}
+		}
+	}
+
+	footerY := padding + (rows+1)*lineH + 12
+	drawRasterText(img, face, padding, footerY, "hackfetch · github.com/xerneas3318/hackfetch", dimColor)
+
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	switch format {
+	case "png":
+		return png.Encode(out, img)
+	case "jpeg":
+		// JPEG has no alpha; flatten transparent area to the card bg color.
+		flat := image.NewRGBA(img.Bounds())
+		draw.Draw(flat, flat.Bounds(), &image.Uniform{color.RGBA{0x0a, 0x0a, 0x0c, 0xff}}, image.Point{}, draw.Src)
+		draw.Draw(flat, flat.Bounds(), img, image.Point{}, draw.Over)
+		return jpeg.Encode(out, flat, &jpeg.Options{Quality: 92})
+	default:
+		return fmt.Errorf("unknown raster format: %s", format)
+	}
+}
+
 func main() {
 	loadCustomSchemes()
 
@@ -1233,7 +1424,7 @@ func main() {
 	defaultVerbose := os.Getenv("HACKFETCH_VERBOSE") != ""
 	verboseFlag := flag.Bool("v", defaultVerbose, "verbose: also show editor + category breakdowns (set HACKFETCH_VERBOSE=1 to make default)")
 	watchFlag := flag.Bool("watch", false, "live mode: refresh every 30s until ctrl+c")
-	exportFlag := flag.String("export", "", "export the fetch as an SVG card to a file (e.g. card.svg)")
+	exportFlag := flag.String("export", "", "export the fetch as an image (e.g. card.png, card.jpg, card.svg)")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "hackfetch — hack club system fetch")
 		fmt.Fprintln(os.Stderr)
@@ -1339,7 +1530,19 @@ func main() {
 	fields := buildFields(cfg, *noNet, *verboseFlag)
 
 	if *exportFlag != "" {
-		if err := exportSVG(*exportFlag, logoLines, sch, fields); err != nil {
+		var err error
+		switch strings.ToLower(filepath.Ext(*exportFlag)) {
+		case ".svg":
+			err = exportSVG(*exportFlag, logoLines, sch, fields)
+		case ".png":
+			err = exportRaster(*exportFlag, logoLines, sch, fields, "png")
+		case ".jpg", ".jpeg":
+			err = exportRaster(*exportFlag, logoLines, sch, fields, "jpeg")
+		default:
+			fmt.Fprintf(os.Stderr, "unsupported export extension %q (use .png, .jpg, or .svg)\n", filepath.Ext(*exportFlag))
+			os.Exit(1)
+		}
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "export failed: %v\n", err)
 			os.Exit(1)
 		}

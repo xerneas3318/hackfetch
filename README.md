@@ -27,7 +27,7 @@ hackfetch was built for [Stardance](https://stardance.hackclub.com), Hack Club's
 - [Usage](#usage)
 - [Logos and color schemes](#logos-and-color-schemes)
 - [Custom themes](#custom-themes)
-- [Live mode and SVG export](#live-mode-and-svg-export)
+- [Live mode and card export](#live-mode-and-card-export)
 - [Configuration](#configuration)
 - [What you get from Hackatime](#what-you-get-from-hackatime)
 - [Repository layout](#repository-layout)
@@ -53,7 +53,7 @@ hackfetch runs as one Go binary that pulls four things together at once:
 - **System fetch.** OS, hostname, user, shell, terminal, editor. The classic neofetch-style snapshot of the machine you are on, rendered next to a Hack Club logo.
 - **Hackatime stats.** Today's coding time, 7-day total, current streak, top project, most-used language, top editor, top category. Pulled live from your Hackatime account every time you run the command.
 - **Live mode.** `hackfetch -watch` keeps the fetch on screen and redraws every 30 seconds. Your hours tick up as you code, in the corner of your terminal.
-- **SVG export.** `hackfetch -export card.svg` saves the current fetch as a shareable image with all colors preserved. Drop it into a devlog, a Slack channel, or a tweet.
+- **Card export.** `hackfetch -export card.png` (or `.jpg`, or `.svg`) saves the current fetch as a shareable image with all colors preserved. Drop it into a devlog, a Slack channel, or a tweet.
 
 All rendering happens locally in your terminal. No browser, no dashboard, no extra processes.
 
@@ -98,10 +98,10 @@ All rendering happens locally in your terminal. No browser, no dashboard, no ext
                     │
                     ├──► layout engine      (pads each logo row, aligns info column)
                     │
-                    └──► render targets     (ANSI 256-color terminal, or SVG card)
+                    └──► render targets     (ANSI 256-color terminal, or PNG/JPG/SVG card)
 ```
 
-A single binary, one network round-trip per refresh, no daemon. The same render pipeline drives both the one-shot fetch and the `-watch` live mode; the SVG exporter shares the layout engine and re-emits each styled glyph as an `<tspan>` with a matching hex fill.
+A single binary, one network round-trip per refresh, no daemon. The same render pipeline drives both the one-shot fetch and the `-watch` live mode. The card exporter shares the layout engine and can emit **PNG**, **JPEG**, or **SVG** depending on the output file extension; PNG/JPG are rasterized in-process using an embedded copy of DejaVu Sans Mono so no system fonts or external converters are needed.
 
 ## Getting started
 
@@ -155,14 +155,14 @@ hackfetch logo flag color pride        # keyword form
 hackfetch -logo orpheus -color ocean   # flag form
 hackfetch -v                           # verbose: + top editor, top category
 hackfetch -watch                       # live mode, refreshes every 30s
-hackfetch -export card.svg             # save the fetch as a shareable SVG
+hackfetch -export card.png             # save the fetch as a shareable image (.png/.jpg/.svg)
 hackfetch -list                        # show all logos and colors
 hackfetch -h                           # help
 hackfetch -setup                       # (re-)configure Hackatime
 hackfetch -no-net                      # offline mode (skip API calls)
 ```
 
-Flags go before positional args. `hackfetch -export card.svg stardance pride` works; `hackfetch stardance pride -export card.svg` does not.
+Flags go before positional args. `hackfetch -export card.png stardance pride` works; `hackfetch stardance pride -export card.png` does not.
 
 ## Logos and color schemes
 
@@ -201,7 +201,7 @@ Drop your own color schemes in `~/.config/hackfetch/colors.json`:
 hackfetch -color vaporwave
 ```
 
-## Live mode and SVG export
+## Live mode and card export
 
 **Live mode (`-watch`).** Re-fetches your Hackatime stats every 30 seconds and redraws in place. Today's hours tick up as you code. Ctrl+C to quit.
 
@@ -210,11 +210,15 @@ hackfetch -watch
 hackfetch rocket -watch -color sunset
 ```
 
-**SVG export (`-export`).** Saves the current fetch as a shareable SVG card with rounded corners and a monospace font. Open it in any browser, or convert to PNG with `rsvg-convert`.
+**Card export (`-export`).** Saves the current fetch as a shareable image with rounded corners, dark background, and every color preserved. The output format is picked from the file extension:
+
+- `.png`: full-color raster, rendered in-process with an embedded monospace font. Best for uploading to Slack, Discord, Stardance devlogs, or anywhere else that won't accept SVG.
+- `.jpg` / `.jpeg`: same rendering, JPEG-encoded at quality 92. Smaller file, no transparency.
+- `.svg`: original vector output. Open it in any browser; scales cleanly to any size.
 
 ```sh
-hackfetch -export card.svg
-hackfetch -export card.svg stardance pride
+hackfetch -export card.png
+hackfetch -export card.jpg stardance pride
 hackfetch -export card.svg -logo orpheus -color rainbow
 ```
 
@@ -253,7 +257,8 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 
 | Path | Contents |
 |---|---|
-| `main.go` | The whole CLI: logos, color schemes, layout engine, Hackatime client, SVG export, watch mode. |
+| `main.go` | The whole CLI: logos, color schemes, layout engine, Hackatime client, PNG/JPG/SVG export, watch mode. |
+| `assets/` | Embedded resources: DejaVu Sans Mono (Bitstream Vera License) used for raster export. |
 | `install.sh` | POSIX shell installer for Linux and macOS. Auto-installs prereqs via the system package manager. |
 | `install.ps1` | PowerShell installer for Windows (10/11, amd64 and arm64). |
 | `Formula/hackfetch.rb` | Homebrew formula (used by the `xerneas3318/tap` tap). |
@@ -262,7 +267,7 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 
 ## Status
 
-`v1.5.0` is the current release: Linux, macOS, and Windows binaries on every tag, POSIX-compatible installer that auto-installs prereqs across seven package managers, a PowerShell installer for Windows, six built-in Hack Club logos, live `-watch` mode, SVG card export, custom color themes, and Hackatime integration with smart language inference.
+`v1.5.0` is the current release: Linux, macOS, and Windows binaries on every tag, POSIX-compatible installer that auto-installs prereqs across seven package managers, a PowerShell installer for Windows, six built-in Hack Club logos, live `-watch` mode, PNG/JPG/SVG card export, custom color themes, and Hackatime integration with smart language inference.
 
 Related Hack Club tooling and inspirations:
 
