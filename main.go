@@ -1088,6 +1088,53 @@ func runWatch(logoLines []string, sch scheme, cfg *config, noNet, verbose bool, 
 	}
 }
 
+// ─── loading spinner ────────────────────────────────────────────────────────
+
+// stderrIsTTY reports whether stderr is attached to a terminal (so animated
+// output makes sense). Returns false if stderr is redirected to a file or pipe.
+func stderrIsTTY() bool {
+	fi, err := os.Stderr.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+// startSpinner shows an animated spinner + label on stderr and returns a stop
+// function. Calling stop() clears the line and blocks until the goroutine has
+// released it, so the next thing you print won't collide with a stale frame.
+// If stderr isn't a tty, stop() is a no-op.
+func startSpinner(label string) func() {
+	if !stderrIsTTY() {
+		return func() {}
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	go func() {
+		defer close(done)
+		// print an initial frame immediately so short fetches still show something
+		fmt.Fprintf(os.Stderr, "\r\x1b[2m%s %s\x1b[0m", frames[0], label)
+		ticker := time.NewTicker(80 * time.Millisecond)
+		defer ticker.Stop()
+		i := 1
+		for {
+			select {
+			case <-stop:
+				fmt.Fprint(os.Stderr, "\r\x1b[K")
+				return
+			case <-ticker.C:
+				fmt.Fprintf(os.Stderr, "\r\x1b[2m%s %s\x1b[0m", frames[i%len(frames)], label)
+				i++
+			}
+		}
+	}()
+	return func() {
+		close(stop)
+		<-done
+	}
+}
+
 // ─── svg export ──────────────────────────────────────────────────────────────
 
 func stripANSI(s string) string {
@@ -1527,7 +1574,14 @@ func main() {
 		return
 	}
 
+	var stopSpinner func()
+	if cfg != nil && !*noNet {
+		stopSpinner = startSpinner("fetching Hackatime...")
+	}
 	fields := buildFields(cfg, *noNet, *verboseFlag)
+	if stopSpinner != nil {
+		stopSpinner()
+	}
 
 	if *exportFlag != "" {
 		var err error
