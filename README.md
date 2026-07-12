@@ -32,7 +32,7 @@ hackfetch was built for [Stardance](https://stardance.hackclub.com), Hack Club's
 - [What you get from Hackatime](#what-you-get-from-hackatime)
 - [Repository layout](#repository-layout)
 - [Status](#status)
-- [License & use](#license--use)
+- [License](#license)
 
 ## Why hackfetch
 
@@ -277,15 +277,9 @@ Related Hack Club tooling and inspirations:
 - [nFetch](https://github.com/aaronsbytes/nfetch), the dependency-free Go system-fetch that inspired the architecture here.
 - [neofetch](https://github.com/dylanaraps/neofetch), the original genre-defining fetch.
 
-## License & use
+## License
 
-hackfetch is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
-
-**You can:** fork it, modify it, ship your own variant, customize the logos and color schemes, run it on your own machines, and use it for personal projects, school projects, club projects, hackathons, or any other non-commercial purpose.
-
-**You can't:** sell it, ship it as part of a paid product, host it as a paid service, or otherwise use it commercially.
-
-If you build something cool with it, drop a link in `#code` on the Hack Club Slack.
+[PolyForm Noncommercial 1.0.0](LICENSE). Fork it and tinker for fun, just don't sell it.
 
 ---
 
