@@ -130,6 +130,9 @@ Alternative install paths:
 brew tap xerneas3318/tap
 brew install hackfetch
 
+# AUR (Arch, CachyOS, Manjaro, EndeavourOS, etc.)
+yay -S hackfetch-bin      # or: paru -S hackfetch-bin
+
 # From source with Go
 go install github.com/xerneas3318/hackfetch@latest
 ```
@@ -257,11 +260,20 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 
 | Path | Contents |
 |---|---|
-| `main.go` | The whole CLI: logos, color schemes, layout engine, Hackatime client, PNG/JPG/SVG export, watch mode. |
+| `main.go` | Flag parsing and entry point. |
+| `logos.go` | Every built-in ASCII logo. |
+| `colors.go` | Color schemes, ANSI codes, and the ANSI-to-hex table. |
+| `config.go` | Reads `~/.wakatime.cfg`. |
+| `hackatime.go` | HTTP client, response caches, parallel prefetch, language inference. |
+| `sysinfo.go` | OS, shell, editor, terminal, hostname. |
+| `setup.go` | Interactive `-setup` flow. |
+| `render.go` | Terminal render, watch loop, loading spinner. |
+| `export.go` | SVG / PNG / JPG card exporters. |
 | `assets/` | Embedded resources: DejaVu Sans Mono (Bitstream Vera License) used for raster export. |
 | `install.sh` | POSIX shell installer for Linux and macOS. Auto-installs prereqs via the system package manager. |
 | `install.ps1` | PowerShell installer for Windows (10/11, amd64 and arm64). |
 | `Formula/hackfetch.rb` | Homebrew formula (used by the `xerneas3318/tap` tap). |
+| `packaging/aur/` | Source of truth for the AUR packages (see the README in that folder for publish steps). |
 | `.github/workflows/release.yml` | CI: builds 6 cross-platform binaries on every tag and publishes the GitHub release. |
 | `Images/` | Gallery screenshots used in this README. |
 
