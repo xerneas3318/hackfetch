@@ -5,7 +5,7 @@
 [![Built for Stardance](https://img.shields.io/badge/Built%20for-Stardance-9b5cf6?style=flat-square)](https://stardance.hackclub.com)
 [![Platforms](https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-2e7d32?style=flat-square)](#getting-started)
 [![License PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-blue?style=flat-square)](LICENSE)
-[![Release v1.5.0](https://img.shields.io/badge/Release-v1.5.0-ec3750?style=flat-square)](https://github.com/xerneas3318/hackfetch/releases)
+[![Release v1.7.3](https://img.shields.io/badge/Release-v1.7.3-ec3750?style=flat-square)](https://github.com/xerneas3318/hackfetch/releases)
 
 <p align="center">
   <img src="Images/stardance-ocean.png" alt="hackfetch stardance ocean" width="820">
@@ -173,13 +173,70 @@ Flags go before positional args. `hackfetch -export card.png stardance pride` wo
 
 | | Available |
 |---|---|
-| **Logos** | `hackclub`, `stardance`, `flag`, `orpheus`, `bot`, `rocket` |
+| **Logos** | `hackclub`, `stardance`, `flag`, `orpheus`, `bot`, `rocket`, `pizza` |
 | **Solid colors** | `hackclub`, `orange`, `mono`, `mute`, `matrix` |
 | **Gradients** | `rainbow`, `sunset`, `ocean`, `forest`, `stardance` |
 | **Pride flags** | `pride`, `trans`, `bi`, `pan` |
 | **Special** | `auto` (defaults to `pride` in June, `hackclub` otherwise) |
 
-Run `hackfetch -list` for the full set.
+Run `hackfetch -list` for the same table, printed live from the binary:
+
+```
+$ hackfetch -list
+logos:
+  bot
+  flag
+  hackclub
+  orpheus
+  pizza
+  rocket
+  stardance
+
+colors:
+  bi
+  bisexual
+  forest
+  hackclub
+  matrix
+  mono
+  mute
+  ocean
+  orange
+  pan
+  pansexual
+  pride
+  rainbow
+  stardance
+  sunset
+  trans
+```
+
+And `hackfetch -h` for the full flag reference:
+
+```
+$ hackfetch -h
+hackfetch: hack club system fetch
+
+usage:
+  hackfetch [logo] [color] [flags]
+  hackfetch logo <name> color <name> [flags]
+
+examples:
+  hackfetch                              # defaults
+  hackfetch stardance rainbow            # shorthand
+  hackfetch logo flag color pride        # keyword form
+  hackfetch -logo orpheus -color ocean   # flag form
+
+flags:
+  -color string    color scheme (see -list) (default "hackclub")
+  -export string   export the fetch as an image (e.g. card.png, card.jpg, card.svg)
+  -list            list available logos and color schemes
+  -logo string     logo name (see -list) (default "hackclub")
+  -no-net          skip api calls (offline mode)
+  -setup           re-run the api key setup flow
+  -v               verbose: also show editor + category breakdowns
+  -watch           live mode: refresh every 30s until ctrl+c
+```
 
 ## Custom themes
 
@@ -281,7 +338,19 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 
 ## Status
 
-`v1.5.0` is the current release: Linux, macOS, and Windows binaries on every tag, POSIX-compatible installer that auto-installs prereqs across seven package managers, a PowerShell installer for Windows, six built-in Hack Club logos, live `-watch` mode, PNG/JPG/SVG card export, custom color themes, and Hackatime integration with smart language inference.
+`v1.7.3` is the current release. What ships in the box today:
+
+- **Cross-platform binaries** built on every tag for Linux, macOS, and Windows (x86_64 and arm64).
+- **Install anywhere** in one line: the POSIX curl installer auto-installs missing prereqs across seven package managers, plus a PowerShell installer for Windows.
+- **Homebrew tap** for macOS and Linuxbrew: `brew tap xerneas3318/tap && brew install hackfetch`.
+- **AUR package** for the Arch family: `yay -S hackfetch-bin` on Arch, CachyOS, Manjaro, EndeavourOS, Garuda, etc.
+- **Seven built-in Hack Club logos** (`hackclub`, `stardance`, `flag`, `orpheus`, `bot`, `rocket`, `pizza`) and fifteen color schemes including a full Pride flag pack.
+- **Live `-watch` mode** that redraws in place every 30 seconds.
+- **Card export** in SVG, PNG, and JPG (raster path uses an embedded copy of DejaVu Sans Mono so box drawing, block shading, and Unicode symbols all render correctly).
+- **Loading spinner** on stderr while the Hackatime fetch runs.
+- **Parallel Hackatime fetch** with a shared HTTP client and connection pool: a full fetch that used to take ~1.7 seconds now takes ~0.7 seconds.
+- **Custom color themes** via `~/.config/hackfetch/colors.json`.
+- **Smart language inference** when Hackatime reports `unknown`: falls back to file extensions from the raw heartbeat log.
 
 Related Hack Club tooling and inspirations:
 
