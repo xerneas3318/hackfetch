@@ -137,6 +137,8 @@ yay -S hackfetch-bin      # or: paru -S hackfetch-bin
 go install github.com/xerneas3318/hackfetch@latest
 ```
 
+The AUR package lives at [aur.archlinux.org/packages/hackfetch-bin](https://aur.archlinux.org/packages/hackfetch-bin) and pulls the pre-built release binary, so there's no Go build step on the user's machine. Works on x86_64 and aarch64.
+
 ### 2. Connect to Hackatime
 
 hackfetch reads your API key from `~/.wakatime.cfg`. If you already use Hackatime or WakaTime, you're done.
