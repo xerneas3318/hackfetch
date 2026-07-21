@@ -5,7 +5,7 @@
 [![Built for Stardance](https://img.shields.io/badge/Built%20for-Stardance-9b5cf6?style=flat-square)](https://stardance.hackclub.com)
 [![Platforms](https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-2e7d32?style=flat-square)](#getting-started)
 [![License PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-blue?style=flat-square)](LICENSE)
-[![Release v1.7.3](https://img.shields.io/badge/Release-v1.7.3-ec3750?style=flat-square)](https://github.com/xerneas3318/hackfetch/releases)
+[![Release v1.10.0](https://img.shields.io/badge/Release-v1.10.0-ec3750?style=flat-square)](https://github.com/xerneas3318/hackfetch/releases)
 
 <p align="center">
   <img src="Images/stardance-ocean.png" alt="hackfetch stardance ocean" width="820">
@@ -28,6 +28,10 @@ hackfetch was built for [Stardance](https://stardance.hackclub.com), Hack Club's
 - [Logos and color schemes](#logos-and-color-schemes)
 - [Custom themes](#custom-themes)
 - [Live mode and card export](#live-mode-and-card-export)
+- [Status bar integration (tmux + nvim)](#status-bar-integration-tmux--nvim)
+- [Doctor](#doctor)
+- [Caching](#caching)
+- [True-color gradients](#true-color-gradients)
 - [Configuration](#configuration)
 - [What you get from Hackatime](#what-you-get-from-hackatime)
 - [Repository layout](#repository-layout)
@@ -54,6 +58,10 @@ hackfetch runs as one Go binary that pulls four things together at once:
 - **Hackatime stats.** Today's coding time, 7-day total, current streak, top project, most-used language, top editor, top category. Pulled live from your Hackatime account every time you run the command.
 - **Live mode.** `hackfetch -watch` keeps the fetch on screen and redraws every 30 seconds. Your hours tick up as you code, in the corner of your terminal.
 - **Card export.** `hackfetch -export card.png` (or `.jpg`, or `.svg`) saves the current fetch as a shareable image with all colors preserved. Drop it into a devlog, a Slack channel, or a tweet.
+- **Status bar mode.** `hackfetch -status` prints a compact one-line summary for tmux `status-right`, lualine, or any other status bar that shells out to a command.
+- **Self-diagnosis.** `hackfetch -doctor` walks a colored checklist of your setup (config, api key, network, terminal, browser) and tells you exactly what to fix if anything is red.
+- **On-disk cache.** Repeat runs read from `~/.cache/hackfetch/last.json` and return in ~20ms instead of ~700ms, so a tmux status bar polling every minute is effectively free.
+- **24-bit color.** Auto-detects `COLORTERM=truecolor` and emits smooth interpolated gradients on modern terminals. Falls back to 256-color on everything else.
 
 All rendering happens locally in your terminal. No browser, no dashboard, no extra processes.
 
@@ -161,9 +169,12 @@ hackfetch -logo orpheus -color ocean   # flag form
 hackfetch -v                           # verbose: + top editor, top category
 hackfetch -watch                       # live mode, refreshes every 30s
 hackfetch -export card.png             # save the fetch as a shareable image (.png/.jpg/.svg)
+hackfetch -status                      # one-line summary for tmux/lualine status bars
+hackfetch -doctor                      # diagnose setup, api, network, terminal
 hackfetch -list                        # show all logos and colors
 hackfetch -h                           # help
 hackfetch -setup                       # (re-)configure Hackatime
+hackfetch -no-cache                    # skip the on-disk cache and force a fresh fetch
 hackfetch -no-net                      # offline mode (skip API calls)
 ```
 
@@ -284,6 +295,90 @@ hackfetch -export card.jpg stardance pride
 hackfetch -export card.svg -logo orpheus -color rainbow
 ```
 
+## Status bar integration (tmux + nvim)
+
+`hackfetch -status` prints a compact one-liner meant for status bars. It's non-interactive (never launches setup, exits silently if hackatime isn't configured, silent on API errors) so it's safe for anything that polls a command every few seconds.
+
+```
+$ hackfetch -status
+2h 11m today · hackfetch (45m) · streak 12
+```
+
+**tmux.** Add to `~/.tmux.conf`:
+
+```
+set -g status-right "#(hackfetch -status)"
+set -g status-interval 60
+```
+
+Every session, every window, refreshing once a minute.
+
+**Neovim (lualine).** Add a lualine section that shells out:
+
+```lua
+require('lualine').setup {
+  sections = {
+    lualine_z = {
+      function()
+        return vim.fn.system("hackfetch -status"):gsub("\n", "")
+      end
+    }
+  }
+}
+```
+
+Combined with the on-disk cache below, both are basically free after the first fetch of the minute.
+
+## Doctor
+
+`hackfetch -doctor` walks a colored checklist of your setup and tells you what's broken.
+
+```
+$ hackfetch -doctor
+
+  ✦ hackfetch doctor
+
+  ✓ wakatime config exists       /Users/xerneas/.wakatime.cfg
+  ✓ api_key present              loaded from hackatime.hackclub.com
+  ✓ wakatime-cli found           /Users/xerneas/.wakatime/wakatime-cli
+  ✓ hackatime api reachable      today: 28m (327ms)
+  ✓ terminal supports truecolor  $COLORTERM=truecolor
+  ✓ browser opener available     /usr/bin/open
+
+  ✓ everything looks good
+```
+
+Green if it works, orange if it doesn't, short hint on any failing line. Exits non-zero on failure so you can script it in CI or install checks.
+
+## Caching
+
+Every fetch checks `~/.cache/hackfetch/last.json` first. If the snapshot is younger than the per-mode TTL, hackfetch skips the network entirely and renders from disk.
+
+| mode | TTL | typical cost |
+|---|---|---:|
+| `hackfetch` | 30s | ~23ms on hit vs ~700ms cold |
+| `hackfetch -status` | 60s | ~6ms on hit vs ~700ms cold |
+| `hackfetch -watch` | (ignored) | always fresh |
+
+Reasons this exists: fewer TLS handshakes = less battery drain, offline resilience (tmux bar keeps working when wifi drops), and being nice to the free Hackatime API.
+
+Opt out with `-no-cache` or `HACKFETCH_CACHE_TTL=0`. Override the TTL with `HACKFETCH_CACHE_TTL=300` (seconds). Point the cache elsewhere with `HACKFETCH_CACHE=/path/to/file.json`.
+
+Writes are atomic (`.tmp` + rename), so nothing ever reads a torn file. The cache is mode `0600` because it contains your top project name.
+
+## True-color gradients
+
+Gradient schemes (`rainbow`, `sunset`, `ocean`, `forest`, `stardance`) auto-detect 24-bit color support via `$COLORTERM` and emit smooth interpolated colors instead of stepping through the 256-color palette. Terminals without truecolor support fall back to the classic quantized cycle automatically.
+
+Force it either way:
+
+```sh
+HACKFETCH_TRUECOLOR=1 hackfetch stardance rainbow   # force smooth
+HACKFETCH_TRUECOLOR=0 hackfetch stardance rainbow   # force fallback
+```
+
+The card exporters (SVG/PNG/JPG) always use smooth interpolation since they aren't constrained by terminal color depth.
+
 ## Configuration
 
 hackfetch reads these environment variables. Add them to your `~/.zshrc` or `~/.bashrc` to set defaults:
@@ -294,6 +389,10 @@ hackfetch reads these environment variables. Add them to your `~/.zshrc` or `~/.
 | `HACKFETCH_COLOR` | `hackclub` | Default color scheme. |
 | `HACKFETCH_VERBOSE` | unset | Set to `1` to enable `-v` output by default. |
 | `HACKFETCH_STARDUST` | unset | Your stardust count. Shown next to the ✦ field. |
+| `HACKFETCH_TRUECOLOR` | (auto) | Force 24-bit color on (`1`) or off (`0`). Auto-detects from `$COLORTERM` by default. |
+| `HACKFETCH_CACHE` | `~/.cache/hackfetch/last.json` | Path to the on-disk response cache. |
+| `HACKFETCH_CACHE_TTL` | (per-mode) | Cache TTL in seconds. `0` disables. Overrides the built-in per-mode defaults. |
+| `HACKFETCH_DEBUG` | unset | Set to `1` to log API calls and cache decisions to stderr. |
 | `HACKFETCH_INSTALL_DIR` | (auto) | Override the install directory used by `install.sh`. |
 | `WAKATIME_HOME` | `$HOME` | Where to look for `.wakatime.cfg`. |
 
@@ -326,8 +425,10 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 | `hackatime.go` | HTTP client, response caches, parallel prefetch, language inference. |
 | `sysinfo.go` | OS, shell, editor, terminal, hostname. |
 | `setup.go` | Interactive `-setup` flow. |
-| `render.go` | Terminal render, watch loop, loading spinner. |
+| `render.go` | Terminal render, `-status` one-liner, watch loop, loading spinner. |
 | `export.go` | SVG / PNG / JPG card exporters. |
+| `cache.go` | On-disk response cache (`~/.cache/hackfetch/last.json`) with per-mode TTL and atomic writes. |
+| `doctor.go` | `-doctor` diagnostic checklist. |
 | `assets/` | Embedded resources: DejaVu Sans Mono (Bitstream Vera License) used for raster export. |
 | `install.sh` | POSIX shell installer for Linux and macOS. Auto-installs prereqs via the system package manager. |
 | `install.ps1` | PowerShell installer for Windows (10/11, amd64 and arm64). |
@@ -338,7 +439,7 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 
 ## Status
 
-`v1.7.3` is the current release. What ships in the box today:
+`v1.10.0` is the current release. What ships in the box today:
 
 - **Cross-platform binaries** built on every tag for Linux, macOS, and Windows (x86_64 and arm64).
 - **Install anywhere** in one line: the POSIX curl installer auto-installs missing prereqs across seven package managers, plus a PowerShell installer for Windows.
@@ -346,9 +447,13 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 - **AUR package** for the Arch family: `yay -S hackfetch-bin` on Arch, CachyOS, Manjaro, EndeavourOS, Garuda, etc.
 - **Seven built-in Hack Club logos** (`hackclub`, `stardance`, `flag`, `orpheus`, `bot`, `rocket`, `pizza`) and fifteen color schemes including a full Pride flag pack.
 - **Live `-watch` mode** that redraws in place every 30 seconds.
+- **Status bar mode** (`-status`) for tmux and lualine integration.
+- **Self-diagnosis** (`-doctor`) that walks a colored checklist and tells you exactly what's broken.
+- **On-disk response cache** so repeat runs return in ~20ms instead of ~700ms and tmux polling is basically free.
+- **24-bit color** auto-detection with smooth interpolated gradients on modern terminals (fallback to 256-color on older ones).
 - **Card export** in SVG, PNG, and JPG (raster path uses an embedded copy of DejaVu Sans Mono so box drawing, block shading, and Unicode symbols all render correctly).
 - **Loading spinner** on stderr while the Hackatime fetch runs.
-- **Parallel Hackatime fetch** with a shared HTTP client and connection pool: a full fetch that used to take ~1.7 seconds now takes ~0.7 seconds.
+- **Parallel Hackatime fetch** with a shared HTTP client and connection pool: a full cold fetch that used to take ~1.7 seconds now takes ~0.7 seconds (and ~20ms warm).
 - **Custom color themes** via `~/.config/hackfetch/colors.json`.
 - **Smart language inference** when Hackatime reports `unknown`: falls back to file extensions from the raw heartbeat log.
 
