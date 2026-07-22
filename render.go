@@ -113,7 +113,9 @@ func buildFields(cfg *config, noNet, verbose bool) []field {
 		gotAny := false
 		if u := cachedFetchUser(cfg); u != nil {
 			gotAny = true
-			fields = append(fields, field{"slack", "@" + u.Username})
+			if verbose {
+				fields = append(fields, field{"slack", "@" + u.Username})
+			}
 		}
 		if s := getStreak(cfg); s > 0 {
 			gotAny = true
@@ -154,8 +156,10 @@ func buildFields(cfg *config, noNet, verbose bool) []field {
 		if w := cachedFetchWeek(cfg); w != nil {
 			gotAny = true
 			fields = append(fields, field{"7-day total", fmtDur(w.Data.TotalSeconds)})
-			if bars, ok := sparklineFieldValue(cfg); ok {
-				fields = append(fields, field{"7-day chart", bars})
+			if verbose {
+				if bars, ok := sparklineFieldValue(cfg); ok {
+					fields = append(fields, field{"7-day chart", bars})
+				}
 			}
 			if tp := topItem(w.Data.Projects); tp != "" {
 				fields = append(fields, field{"top project", tp})
@@ -175,7 +179,7 @@ func buildFields(cfg *config, noNet, verbose bool) []field {
 					fields = append(fields, field{"top category", tc})
 				}
 			}
-			if len(w.Data.Machines) > 1 {
+			if verbose && len(w.Data.Machines) > 1 {
 				fields = append(fields, field{"machines", fmt.Sprintf("%d", len(w.Data.Machines))})
 			}
 		}

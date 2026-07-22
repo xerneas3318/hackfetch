@@ -64,7 +64,7 @@ func main() {
 	listFlag := flag.Bool("list", false, "list available logos and color schemes")
 	noNet := flag.Bool("no-net", false, "skip api calls (offline mode)")
 	defaultVerbose := os.Getenv("HACKFETCH_VERBOSE") != ""
-	verboseFlag := flag.Bool("v", defaultVerbose, "verbose: also show editor + category breakdowns (set HACKFETCH_VERBOSE=1 to make default)")
+	verboseFlag := flag.Bool("v", defaultVerbose, "verbose: also show slack, 7-day chart, machines, editor, category (set HACKFETCH_VERBOSE=1 to make default)")
 	watchFlag := flag.Bool("watch", false, "live mode: refresh every 30s until ctrl+c")
 	exportFlag := flag.String("export", "", "export the fetch as an image (e.g. card.png, card.jpg, card.svg)")
 	statusFlag := flag.Bool("status", false, "print a one-line summary for status bars (tmux, lualine) and exit")

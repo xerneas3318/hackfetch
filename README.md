@@ -167,7 +167,7 @@ hackfetch                              # defaults
 hackfetch stardance rainbow            # positional shorthand: <logo> <color>
 hackfetch logo flag color pride        # keyword form
 hackfetch -logo orpheus -color ocean   # flag form
-hackfetch -v                           # verbose: + top editor, top category
+hackfetch -v                           # verbose: + slack, 7-day chart, machines, top editor, top category
 hackfetch -watch                       # live mode, refreshes every 30s
 hackfetch -export card.png             # save the fetch as a shareable image (.png/.jpg/.svg)
 hackfetch -status                      # one-line summary for tmux/lualine status bars
@@ -247,7 +247,7 @@ flags:
   -logo string     logo name (see -list) (default "hackclub")
   -no-net          skip api calls (offline mode)
   -setup           re-run the api key setup flow
-  -v               verbose: also show editor + category breakdowns
+  -v               verbose: also show slack, 7-day chart, machines, editor, category
   -watch           live mode: refresh every 30s until ctrl+c
 ```
 
@@ -422,10 +422,11 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 | **streak** | Consecutive days with activity. |
 | **stardust ✦** | Your stardust count (set via `HACKFETCH_STARDUST=N`). |
 | **stardance** | Days left until Stardance ends (auto-hides after Sep 30, 2026). |
-| **slack** | Your Hack Club / Hackatime handle. |
 | **top project** | Most-worked project (today and weekly). |
 | **top language** | Most-used language. When Hackatime reports `unknown`, hackfetch infers from heartbeat file extensions and labels it `(inferred)`. |
-| **machines** | When you've coded on more than one machine in the past 7 days. |
+| **slack** | *(verbose)* Your Hack Club / Hackatime handle. Enable with `-v`. |
+| **7-day chart** | *(verbose)* 7-day sparkline of coding time. Enable with `-v`. |
+| **machines** | *(verbose)* When you've coded on more than one machine in the past 7 days. Enable with `-v`. |
 | **top editor** | *(verbose)* Most-used editor. Enable with `-v`. |
 | **top category** | *(verbose)* coding / debugging / building / etc. Enable with `-v`. |
 
