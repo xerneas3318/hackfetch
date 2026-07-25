@@ -71,6 +71,8 @@ func main() {
 	sparklineFlag := flag.Bool("sparkline", false, "with -status, append a 7-day sparkline of coding time")
 	doctorFlag := flag.Bool("doctor", false, "diagnose your setup (config, api key, network, terminal) and exit")
 	noCache := flag.Bool("no-cache", false, "skip the on-disk cache and force a fresh api fetch")
+	leaderboardFlag := flag.String("leaderboard", "", "show hackatime leaderboard: daily or weekly")
+	jsonFlag := flag.Bool("json", false, "dump the fetched data as JSON to stdout and exit")
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "hackfetch: hack club system fetch")
@@ -166,6 +168,25 @@ func main() {
 		os.Exit(runDoctor())
 	}
 
+	// leaderboard mode: public endpoint no auth needed
+	// still needs cfg for the api URL + optional self-highlight
+	if *leaderboardFlag != "" {
+		if *noNet {
+			return
+		}
+		cfg, _ := loadConfig()
+		if cfg == nil {
+			// no config = no self highlight but the leaderboard itself is public
+			// hackfetch still needs a base URL though so bail cleanly
+			fmt.Fprintln(os.Stderr, "run "+bold+"hackfetch -setup"+reset+" first")
+			os.Exit(1)
+		}
+		// piggyback fetchUser so we can highlight the current user in the list
+		go func() { cachedFetchUser(cfg) }()
+		printLeaderboard(cfg, *leaderboardFlag, 10)
+		return
+	}
+
 	logoLines, ok := logos[*logoFlag]
 	if !ok {
 		fmt.Fprintf(os.Stderr, "unknown logo %q (try -list)\n", *logoFlag)
@@ -220,6 +241,13 @@ func main() {
 	fields := buildFields(cfg, *noNet, *verboseFlag)
 	if stopSpinner != nil {
 		stopSpinner()
+	}
+
+	// json dump path shares the same cached data buildFields just consumed
+	// no color codes no ansi just clean json to stdout
+	if *jsonFlag {
+		printJSON(cfg, *noNet)
+		return
 	}
 
 	if *exportFlag != "" {
