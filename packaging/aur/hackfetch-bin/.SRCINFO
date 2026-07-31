@@ -10,8 +10,8 @@ pkgbase = hackfetch-bin
 	conflicts = hackfetch
 	provides = hackfetch
 	source_x86_64 = hackfetch-2.1.1-linux-amd64.tar.gz::https://github.com/xerneas3318/hackfetch/releases/download/v2.1.1/hackfetch-linux-amd64.tar.gz
-	sha256sums_x86_64 = SKIP
+	sha256sums_x86_64 = 55db44f8d7f9b195289c6d79d74d712dce98c0986b1d554d438bc587e837a5a2
 	source_aarch64 = hackfetch-2.1.1-linux-arm64.tar.gz::https://github.com/xerneas3318/hackfetch/releases/download/v2.1.1/hackfetch-linux-arm64.tar.gz
-	sha256sums_aarch64 = SKIP
+	sha256sums_aarch64 = 167915c2717e02e3cf8718e84063604fcbfcd5621c361cf76bdb44d02be4a2bf
 
 pkgname = hackfetch-bin
