@@ -162,21 +162,21 @@ func buildFields(cfg *config, noNet, verbose bool) []field {
 				}
 			}
 			if tp := topItem(w.Data.Projects); tp != "" {
-				fields = append(fields, field{"top project", tp})
+				fields = append(fields, field{"top proj 7d", tp})
 			}
 			if tl := topItem(w.Data.Languages); tl != "" {
-				fields = append(fields, field{"top lang", tl})
+				fields = append(fields, field{"top lang 7d", tl})
 			} else if len(w.Data.Languages) > 0 {
 				if il, ifc := getInferredLang(cfg); il != "" {
-					fields = append(fields, field{"top lang", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
+					fields = append(fields, field{"top lang 7d", fmt.Sprintf("%s%s (~%d files, inferred)%s", il, dim, ifc, reset)})
 				}
 			}
 			if verbose {
 				if te := topItem(w.Data.Editors); te != "" {
-					fields = append(fields, field{"top editor", te})
+					fields = append(fields, field{"top ed 7d", te})
 				}
 				if tc := topItem(w.Data.Categories); tc != "" {
-					fields = append(fields, field{"top category", tc})
+					fields = append(fields, field{"top cat 7d", tc})
 				}
 			}
 			if verbose && len(w.Data.Machines) > 1 {
