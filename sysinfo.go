@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -39,25 +40,115 @@ func envOr(keys []string, fallback string) string {
 	return fallback
 }
 
+// current shell not the login shell
+// $SHELL only tells us the login shell so someone who logs in as bash but runs fish
+// would show up as bash. fingerprint env vars are the cheapest tell then fall back to
+// asking the OS who our parent process is
 func getShell() string {
-	s := os.Getenv("SHELL")
-	if s == "" {
-		return missing
+	if os.Getenv("FISH_VERSION") != "" {
+		return "fish"
 	}
-	return filepath.Base(s)
+	if os.Getenv("ZSH_VERSION") != "" {
+		return "zsh"
+	}
+	if os.Getenv("BASH_VERSION") != "" {
+		return "bash"
+	}
+	if name := parentShellName(); name != "" {
+		return name
+	}
+	if s := os.Getenv("SHELL"); s != "" {
+		return filepath.Base(s)
+	}
+	return missing
+}
+
+// asks the OS who our parent process is
+// login shells sometimes prefix themselves with a dash (-bash) strip it
+// only returns known shell names so we dont accidentally report "tmux" or "sshd" or "kitty"
+func parentShellName() string {
+	ppid := os.Getppid()
+	if ppid <= 1 {
+		return ""
+	}
+	out, err := exec.Command("ps", "-o", "comm=", "-p", strconv.Itoa(ppid)).Output()
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(string(out))
+	name = strings.TrimPrefix(name, "-")
+	name = filepath.Base(name)
+	name = strings.TrimSuffix(strings.ToLower(name), ".exe")
+	switch name {
+	case "sh", "bash", "zsh", "fish", "ksh", "dash", "tcsh", "csh", "elvish", "nushell", "nu", "xonsh", "pwsh", "powershell":
+		return name
+	}
+	return ""
 }
 
 func getTerm() string {
 	return envOr([]string{"TERM_PROGRAM", "TERM"}, missing)
 }
 
+// $VISUAL then $EDITOR
+// stripping trailing args like "code --wait" and mapping the ugly launcher names
+// (zeditor is really Zed, code is really VS Code, etc.) so the fetch reads like english
 func getEditor() string {
 	for _, e := range []string{"VISUAL", "EDITOR"} {
-		if v := os.Getenv(e); v != "" {
-			return filepath.Base(v)
+		if v := strings.TrimSpace(os.Getenv(e)); v != "" {
+			return prettifyEditor(v)
 		}
 	}
 	return missing
+}
+
+// splits on whitespace to drop args, lowercases, drops .exe, then maps known launchers
+// unknown names pass through unchanged so custom editors still show up
+func prettifyEditor(v string) string {
+	if i := strings.IndexAny(v, " \t"); i >= 0 {
+		v = v[:i]
+	}
+	base := strings.ToLower(filepath.Base(v))
+	base = strings.TrimSuffix(base, ".exe")
+	switch base {
+	case "zeditor", "zed":
+		return "Zed"
+	case "code":
+		return "VS Code"
+	case "code-insiders":
+		return "VS Code Insiders"
+	case "codium", "vscodium":
+		return "VSCodium"
+	case "cursor":
+		return "Cursor"
+	case "windsurf":
+		return "Windsurf"
+	case "subl", "sublime_text":
+		return "Sublime Text"
+	case "atom":
+		return "Atom"
+	case "hx", "helix":
+		return "Helix"
+	case "nvim":
+		return "Neovim"
+	case "vim":
+		return "Vim"
+	case "vi":
+		return "vi"
+	case "emacs":
+		return "Emacs"
+	case "kak":
+		return "Kakoune"
+	case "micro":
+		return "micro"
+	case "nano":
+		return "nano"
+	case "pico":
+		return "pico"
+	case "ed":
+		return "ed"
+	}
+	return base
 }
 
 // human os label
