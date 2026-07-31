@@ -5,7 +5,7 @@
 [![Built for Stardance](https://img.shields.io/badge/Built%20for-Stardance-9b5cf6?style=flat-square)](https://stardance.hackclub.com)
 [![Platforms](https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-2e7d32?style=flat-square)](#getting-started)
 [![License PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-blue?style=flat-square)](LICENSE)
-[![Release v2.1.0](https://img.shields.io/badge/Release-v2.1.0-ec3750?style=flat-square)](https://github.com/xerneas3318/hackfetch/releases)
+[![Release v2.1.1](https://img.shields.io/badge/Release-v2.1.1-ec3750?style=flat-square)](https://github.com/xerneas3318/hackfetch/releases)
 
 <p align="center">
   <img src="Images/stardance-ocean.png" alt="hackfetch stardance ocean" width="820">
@@ -459,7 +459,7 @@ When your `~/.wakatime.cfg` points at a working Hackatime account, hackfetch fet
 
 ## Status
 
-`v2.1.0` is the current release. What ships in the box today:
+`v2.1.1` is the current release. What ships in the box today:
 
 - **Cross-platform binaries** built on every tag for Linux, macOS, and Windows (x86_64 and arm64).
 - **Install anywhere** in one line: the POSIX curl installer auto-installs missing prereqs across seven package managers, plus a PowerShell installer for Windows.
