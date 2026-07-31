@@ -19,7 +19,6 @@ func dbg(format string, args ...any) {
 	}
 }
 
-
 // last day of stardance
 // after this the countdown field hides itself
 const stardanceEnd = "2026-09-30"

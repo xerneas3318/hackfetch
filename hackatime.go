@@ -22,7 +22,6 @@ func (c *config) nativeBase() string {
 // last transport error so a totally dead api shows one friendly hint
 var lastAPIErr error
 
-
 // shared http client
 // keeping tls connections alive matters a ton for the parallel prefetch
 // without this every call did a fresh handshake and it was slow af
@@ -156,7 +155,6 @@ func fetchToday(cfg *config) *todayResp {
 	}
 	return &r
 }
-
 
 // in-memory caches
 // resetCaches in render.go clears these between watch refreshes
@@ -351,7 +349,6 @@ func countUniqueFilesToday(cfg *config) int {
 	}
 	return len(seen)
 }
-
 
 // spans = every coding session in the users entire history
 // one call ~150KB gives us everything for streak and the sparkline
