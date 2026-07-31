@@ -65,6 +65,7 @@ var schemes = map[string]scheme{
 	"matrix":    {[]int{40}, modeSingle},
 	"rainbow":   {[]int{196, 202, 208, 214, 220, 226, 190, 154, 118, 82, 46, 49, 51, 45, 39, 33, 27, 93, 129, 165, 201, 199, 197}, modePerChar},
 	"pride":     {[]int{196, 208, 226, 46, 27, 129}, modePerLine},
+	"gay":       {[]int{196, 208, 226, 46, 27, 129}, modePerLine},
 	"sunset":    {[]int{52, 88, 124, 160, 196, 202, 208, 214, 220, 226, 228}, modePerLine},
 	"ocean":     {[]int{17, 18, 19, 20, 21, 27, 33, 39, 45, 51, 87}, modePerLine},
 	"forest":    {[]int{22, 28, 34, 40, 46, 82, 118, 154, 190}, modePerLine},
