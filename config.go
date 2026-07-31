@@ -76,6 +76,7 @@ func configFileFound() (path string, ok bool) {
 
 // parses the wakatime config file
 // returns the api key + url
+// forgiving about inline comments and surrounding quotes since some editors write those
 func loadConfig() (*config, error) {
 	path, err := cfgPath()
 	if err != nil {
@@ -97,12 +98,12 @@ func loadConfig() (*config, error) {
 		if len(parts) != 2 {
 			continue
 		}
-		k := strings.TrimSpace(parts[0])
-		v := strings.TrimSpace(parts[1])
+		k := strings.ToLower(strings.TrimSpace(parts[0]))
+		v := cleanConfigValue(parts[1])
 		switch k {
-		case "api_key", "api-key":
+		case "api_key", "api-key", "apikey":
 			cfg.APIKey = v
-		case "api_url":
+		case "api_url", "api-url", "apiurl":
 			cfg.APIURL = strings.TrimSuffix(v, "/")
 		}
 	}
@@ -110,6 +111,58 @@ func loadConfig() (*config, error) {
 		return nil, fmt.Errorf("no api_key in ~/.wakatime.cfg")
 	}
 	return cfg, nil
+}
+
+// strips whitespace, inline comments (# or ;), and surrounding single or double quotes
+// wakatime configs written by hand or third party tools sometimes have any of these
+func cleanConfigValue(raw string) string {
+	v := raw
+	// drop inline comments but only if the comment marker is preceded by whitespace
+	// (a # inside a quoted key would be weird but lets not misparse)
+	for _, m := range []string{" #", "\t#", " ;", "\t;"} {
+		if i := strings.Index(v, m); i >= 0 {
+			v = v[:i]
+		}
+	}
+	v = strings.TrimSpace(v)
+	// strip surrounding matched quotes
+	if len(v) >= 2 {
+		if (v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'') {
+			v = v[1 : len(v)-1]
+		}
+	}
+	return v
+}
+
+// scans the config file for an api_key line without caring about its value
+// setup uses this to distinguish "file is missing the key entirely" from
+// "key line is present but value looks off" so we can message the user accurately
+func configHasAPIKeyLine() bool {
+	path, err := cfgPath()
+	if err != nil {
+		return false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "[") || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		k := strings.ToLower(strings.TrimSpace(parts[0]))
+		if k == "api_key" || k == "api-key" || k == "apikey" {
+			return true
+		}
+	}
+	return false
 }
 
 // writes or replaces the api_key line in the wakatime config

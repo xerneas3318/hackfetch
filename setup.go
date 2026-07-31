@@ -33,6 +33,17 @@ func openBrowser(url string) error {
 // then re reads the config to confirm
 func runSetup() (*config, error) {
 	reader := bufio.NewReader(os.Stdin)
+
+	// short circuit if a valid config already exists
+	// happens when someone runs `hackfetch -setup` but is already set up
+	if cfg, err := loadConfig(); err == nil {
+		fmt.Println()
+		fmt.Println("  " + green + "✓ hackatime is already set up." + reset)
+		fmt.Println("  " + dim + "  (clear api_key in ~/.wakatime.cfg first if you want to reconfigure.)" + reset)
+		fmt.Println()
+		return cfg, nil
+	}
+
 	fmt.Println()
 	fmt.Println("  " + orange + "✦ looking for hackatime..." + reset)
 	fmt.Println()
@@ -47,7 +58,11 @@ func runSetup() (*config, error) {
 	}
 	if cfgExists {
 		fmt.Println("  " + green + "✓" + reset + " config file:  " + dim + cfgFile + reset)
-		fmt.Println("  " + dim + "    (file exists but has no api_key. finish setup to add it.)" + reset)
+		if configHasAPIKeyLine() {
+			fmt.Println("  " + dim + "    (api_key line is present but the value looks off. check the file for quotes or trailing comments.)" + reset)
+		} else {
+			fmt.Println("  " + dim + "    (no api_key line yet. finish setup below to add one.)" + reset)
+		}
 	} else {
 		fmt.Println("  " + dim + "✗ ~/.wakatime.cfg not found" + reset)
 	}
