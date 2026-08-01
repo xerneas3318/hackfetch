@@ -50,7 +50,6 @@ func render(logoLines []string, sch scheme, fields []field) {
 	fmt.Println()
 }
 
-
 // one line for tmux / lualine / whatever
 // no colors on purpose let the host theme handle styling
 // no output at all if theres nothing meaningful so an unconfigured user doesnt see garbage

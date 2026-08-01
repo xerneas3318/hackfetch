@@ -179,7 +179,6 @@ func hexToRGBA(hex string) color.RGBA {
 	return color.RGBA{uint8(r), uint8(g), uint8(b), 0xff}
 }
 
-
 // paints a rectangle with rounded corners onto an RGBA image
 // only the four corner squares run the distance check the interior fills straight
 func fillRoundedRect(img *image.RGBA, r image.Rectangle, radius int, col color.Color) {

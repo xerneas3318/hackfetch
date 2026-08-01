@@ -50,7 +50,7 @@ type jsonOut struct {
 // pulls from the same cached responses the normal render uses so its consistent
 func printJSON(cfg *config, noNet bool) {
 	out := jsonOut{
-		Version:   "2",
+		Version:   version,
 		FetchedAt: time.Now(),
 		System: jsonSystem{
 			User:   getUser(),

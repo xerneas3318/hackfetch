@@ -37,7 +37,6 @@ func cacheFilePath() string {
 	return filepath.Join(home, ".cache", "hackfetch", "last.json")
 }
 
-
 // ttl 0 = skip cache
 // HACKFETCH_CACHE_TTL overrides
 func cacheTTL(def time.Duration) time.Duration {
@@ -137,7 +136,6 @@ func saveCacheFromMemory(cfg *config) {
 		dbg("cache marshal failed %v", err)
 		return
 	}
-
 
 	// atomic write tmp then rename
 	// otherwise a reader could catch a half written file and cry

@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// bumped on release. also shown in -json output so scripts can tell what shape they got
+const version = "2.2.0"
+
 // HACKFETCH_DEBUG=1 turns on the noisy logs
 var debug = os.Getenv("HACKFETCH_DEBUG") != ""
 
@@ -72,6 +75,9 @@ func main() {
 	noCache := flag.Bool("no-cache", false, "skip the on-disk cache and force a fresh api fetch")
 	leaderboardFlag := flag.String("leaderboard", "", "show hackatime leaderboard: daily or weekly")
 	jsonFlag := flag.Bool("json", false, "dump the fetched data as JSON to stdout and exit")
+	vsFlag := flag.String("vs", "", "head to head compare against another hackatime user (accepts @name, name, or a hackatime profile url)")
+	readmeFlag := flag.Bool("readme", false, "print a markdown stats card ready to paste into your github profile README")
+	versionFlag := flag.Bool("version", false, "print version and exit")
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "hackfetch: hack club system fetch")
@@ -85,6 +91,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  hackfetch stardance rainbow            # shorthand")
 		fmt.Fprintln(os.Stderr, "  hackfetch logo flag color pride        # keyword form")
 		fmt.Fprintln(os.Stderr, "  hackfetch -logo orpheus -color ocean   # flag form")
+		fmt.Fprintln(os.Stderr, "  hackfetch vs @speedhawks               # head to head compare")
+		fmt.Fprintln(os.Stderr, "  hackfetch -readme > stats.md           # markdown for github profile")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "flags:")
 		flag.PrintDefaults()
@@ -93,6 +101,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "colors: "+strings.Join(sortedKeys(schemes), ", "))
 	}
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println("hackfetch v" + version)
+		return
+	}
 
 	// positional args
 	//   hackfetch stardance rainbow
@@ -114,6 +127,14 @@ func main() {
 		case "help", "h":
 			flag.Usage()
 			return
+		case "version":
+			fmt.Println("hackfetch v" + version)
+			return
+		case "vs":
+			if i+1 < len(extras) {
+				*vsFlag = extras[i+1]
+				i++
+			}
 		default:
 			if _, ok := logos[a]; ok {
 				*logoFlag = a
@@ -165,6 +186,22 @@ func main() {
 	// non zero exit code on any red so scripts can gate on it
 	if *doctorFlag {
 		os.Exit(runDoctor())
+	}
+
+	// vs mode: fetch our stats + theirs and print side by side
+	// their spans come from the public /users/:username/heartbeats/spans endpoint
+	if *vsFlag != "" {
+		if *noNet {
+			fmt.Fprintln(os.Stderr, "vs mode needs the network. drop -no-net.")
+			os.Exit(1)
+		}
+		cfg, _ := loadConfig()
+		if cfg == nil {
+			fmt.Fprintln(os.Stderr, "run "+bold+"hackfetch -setup"+reset+" first")
+			os.Exit(1)
+		}
+		printVs(cfg, *vsFlag)
+		return
 	}
 
 	// leaderboard mode: public endpoint no auth needed
@@ -246,6 +283,13 @@ func main() {
 	// no color codes no ansi just clean json to stdout
 	if *jsonFlag {
 		printJSON(cfg, *noNet)
+		return
+	}
+
+	// markdown card for github profile readmes
+	// uses the same cached data as the normal render so no extra api calls
+	if *readmeFlag {
+		printReadmeMarkdown(cfg, *noNet)
 		return
 	}
 
