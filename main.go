@@ -11,7 +11,7 @@ import (
 )
 
 // bumped on release. also shown in -json output so scripts can tell what shape they got
-const version = "2.2.0"
+const version = "2.3.0"
 
 // HACKFETCH_DEBUG=1 turns on the noisy logs
 var debug = os.Getenv("HACKFETCH_DEBUG") != ""
@@ -77,6 +77,7 @@ func main() {
 	jsonFlag := flag.Bool("json", false, "dump the fetched data as JSON to stdout and exit")
 	vsFlag := flag.String("vs", "", "head to head compare against another hackatime user (accepts @name, name, or a hackatime profile url)")
 	readmeFlag := flag.Bool("readme", false, "print a markdown stats card ready to paste into your github profile README")
+	recordsFlag := flag.Bool("records", false, "show your all time personal records: biggest day, longest streak ever, longest session, days coded, lifetime hours")
 	versionFlag := flag.Bool("version", false, "print version and exit")
 
 	flag.Usage = func() {
@@ -92,6 +93,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  hackfetch logo flag color pride        # keyword form")
 		fmt.Fprintln(os.Stderr, "  hackfetch -logo orpheus -color ocean   # flag form")
 		fmt.Fprintln(os.Stderr, "  hackfetch vs @speedhawks               # head to head compare")
+		fmt.Fprintln(os.Stderr, "  hackfetch -records                     # your all time personal records")
 		fmt.Fprintln(os.Stderr, "  hackfetch -readme > stats.md           # markdown for github profile")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "flags:")
@@ -186,6 +188,22 @@ func main() {
 	// non zero exit code on any red so scripts can gate on it
 	if *doctorFlag {
 		os.Exit(runDoctor())
+	}
+
+	// records mode: crunch our full spans history for lifetime records
+	// biggest day longest streak ever longest session etc all from data we already fetch
+	if *recordsFlag {
+		if *noNet {
+			fmt.Fprintln(os.Stderr, "records mode needs the network. drop -no-net.")
+			os.Exit(1)
+		}
+		cfg, _ := loadConfig()
+		if cfg == nil {
+			fmt.Fprintln(os.Stderr, "run "+bold+"hackfetch -setup"+reset+" first")
+			os.Exit(1)
+		}
+		printRecords(cfg)
+		return
 	}
 
 	// vs mode: fetch our stats + theirs and print side by side
